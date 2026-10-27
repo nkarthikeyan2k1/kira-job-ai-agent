@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.next/
+.env
+*.log
+*.tsbuildinfo
+.DS_Store
+
+# agent data
+apps/agent/data/
