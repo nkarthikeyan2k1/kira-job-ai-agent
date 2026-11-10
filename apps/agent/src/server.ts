@@ -1,14 +1,28 @@
-import Fastify from "fastify";
+import { buildApp } from "./app.ts";
+import { createPool } from "./db/client.ts";
+import { loadEnv } from "./env.ts";
+import { dbCheck, ollamaCheck } from "./health.ts";
 
-const app = Fastify({ logger: true });
+const env = loadEnv();
+const pool = createPool(env.DATABASE_URL);
 
-app.get("/health", async () => ({ status: "ok" }));
+const app = buildApp(
+  { healthChecks: { db: dbCheck(pool), ollama: ollamaCheck(env.OLLAMA_URL) } },
+  { logger: { level: env.LOG_LEVEL } },
+);
+app.addHook("onClose", async () => {
+  await pool.end();
+});
 
-const port = Number(process.env.PORT ?? 4000);
-const host = process.env.HOST ?? "127.0.0.1";
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    app.log.info({ signal }, "shutting down");
+    void app.close().then(() => process.exit(0));
+  });
+}
 
 try {
-  await app.listen({ port, host });
+  await app.listen({ port: env.PORT, host: env.HOST });
 } catch (err) {
   app.log.error(err);
   process.exit(1);

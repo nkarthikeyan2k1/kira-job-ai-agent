@@ -1,13 +1,17 @@
 {
   "name": "job-ai-agent",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev:web": "npm run dev -w apps/web",
     "dev:agent": "npm run dev -w apps/agent",
-    "run:agent": "npm run start -w apps/agent",
+    "run:agent": "npm run pipeline -w apps/agent",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:up": "docker compose up -d",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "test": "npm run test --workspaces --if-present"
   }
 }

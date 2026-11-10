@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  // @kira/shared ships TypeScript source, so Next compiles it.
+  transpilePackages: ["@kira/shared"],
   turbopack: {
     rules: {
       "*.css": {
