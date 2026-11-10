@@ -247,7 +247,7 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 - [ ] Web dashboard
 - [ ] Apply assist
 
-Local setup still needed: `cp .env.example .env`, `brew install docker-compose` (the `docker compose` plugin is missing), `ollama pull qwen2.5:7b`, `ollama pull nomic-embed-text` (only `qwen2.5-coder:7b-instruct` is installed), `colima start`, `npm run db:up`. `npm run eval` doesn't exist yet.
+Local setup still needed: add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json` so `docker compose` finds the Homebrew plugin (until then, `docker-compose up -d` works), `ollama pull qwen2.5:7b`, `ollama pull nomic-embed-text` (only `qwen2.5-coder:7b-instruct` is installed). Done: `.env`, Compose 5.7 installed, DB up on 5433 with pgvector 0.8.7. `npm run eval` doesn't exist yet.
 
 ## Usage notes (temporary; remove after Nov 17, 2026)
 
