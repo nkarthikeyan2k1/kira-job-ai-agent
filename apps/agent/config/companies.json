@@ -1,0 +1,34 @@
+[
+  {
+    "id": "stripe",
+    "name": "Stripe",
+    "ats": "greenhouse",
+    "atsKey": "stripe",
+    "careersUrl": "https://stripe.com/jobs",
+    "tier": 1
+  },
+  {
+    "id": "paytm",
+    "name": "Paytm",
+    "ats": "lever",
+    "atsKey": "paytm",
+    "careersUrl": "https://jobs.lever.co/paytm",
+    "tier": 2
+  },
+  {
+    "id": "cred",
+    "name": "CRED",
+    "ats": "lever",
+    "atsKey": "cred",
+    "careersUrl": "https://jobs.lever.co/cred",
+    "tier": 2
+  },
+  {
+    "id": "bmw-techworks",
+    "name": "BMW TechWorks India",
+    "ats": "peoplestrong",
+    "atsKey": "careers-bmwtechworks",
+    "careersUrl": "https://careers-bmwtechworks.peoplestrong.com/job/joblist",
+    "tier": 1
+  }
+]

@@ -13,11 +13,11 @@ import pg from "pg";
 import { pino } from "pino";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadMigrationFiles, runMigrations } from "./migrate.ts";
+import { TEST_DATABASE_URL, wipeTestDatabase } from "./test-db.ts";
 
 // Runs against a throwaway database and is skipped when TEST_DATABASE_URL is
-// not set. It wipes the public schema, so it refuses any database whose name
-// doesn't end in "_test".
-const url = process.env.TEST_DATABASE_URL;
+// not set. It wipes the public schema (see wipeTestDatabase).
+const url = TEST_DATABASE_URL;
 const log = pino({ level: "silent" });
 
 // CHECK constraint → the shared enum it must list, value for value.
@@ -43,9 +43,7 @@ describe.skipIf(!url)("migrations against Postgres", () => {
   beforeAll(async () => {
     client = new pg.Client({ connectionString: url });
     await client.connect();
-    const { rows } = await client.query<{ db: string }>("SELECT current_database() AS db");
-    if (!rows[0]?.db.endsWith("_test")) throw new Error(`Refusing to wipe "${rows[0]?.db}": TEST_DATABASE_URL must point at a *_test database`);
-    await client.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+    await wipeTestDatabase(client);
   });
 
   afterAll(async () => {

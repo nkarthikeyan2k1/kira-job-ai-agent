@@ -60,3 +60,31 @@ Newest entry at the bottom. Each session appends: what was done, what's next, op
 - Scheduler: node-cron vs pg-boss vs BullMQ + Redis.
 - Seniority bands (`intern…manager`) and `tier` meaning (1 = top target) are my defaults; change by migration if wrong.
 - Agent API routes for profile/tracker writes are not built.
+
+## 2026-11-11 (fetch stage, Fable)
+
+**Done**
+- Fetchers: Greenhouse, Lever, PeopleStrong (new ATS type, migration `0002`). `Fetcher` = `fetch` (network, payload archived as received) + `parse` (pure).
+- `fetchers/http.ts`: host allowlist, HTTPS only, no redirects, 1 req/s per host, timeout, 50 MB body cap, 2 retries with backoff + jitter, clamped `Retry-After`.
+- HTML → text port (`lib/`) keeps headings, paragraphs and list items; handles Greenhouse's double-encoded bodies.
+- `config/companies.json` (Zod-validated) synced into `companies`; removed companies are disabled, not deleted.
+- Fetch stage: per-company try/catch, `fetch_runs` row per attempt, raw payloads gzipped in `data/raw/<day>/` and pruned after 7 days, pure `normalizeJob`, upsert that keeps `first_seen` and clears the embedding when the description changes.
+- Tests: 110 passing (fixtures are trimmed real payloads; DB integration on `jobagent_test`; no live calls).
+- Live run (once): Stripe 779, Paytm 201, CRED 14, BMW TechWorks 95 = 1,089 jobs, 0 errors, about 2 minutes (BMW needs one detail request per new job). 311 India postings. Dev-seed rows were truncated first.
+- Ported code credited in file headers + `THIRD_PARTY_NOTICES.md` (career-ops, MIT).
+
+**Not done / known limits**
+- **Wipro not fetched**: its jobs API is under `/services/`, disallowed by its `robots.txt`. Options: skip, or a later `scrape` adapter over its sitemap + `/job/…` pages (allowed, ~5,900 India postings, slow at 1 req/s).
+- PeopleStrong: detail is fetched only for new postings, so a later edit to a stored posting's description is not picked up.
+- `seniority`, `years_min` are null (need JD parsing). `jobs_closed` is always 0: closing jobs after 2 missed runs belongs to the dedupe/liveness work.
+- No replay command for archived payloads yet (done once by hand after a parser fix).
+- Changes are uncommitted, by request.
+
+**Next (Fable)**
+- Dedupe + hard filters (stage 2), including closing jobs not seen for 2 runs. Needs a real profile row first (the fictional one was removed).
+- Then the RAG pipeline: chunking by section, embeddings, retrieval.
+
+**Open decisions**
+- Wipro: skip or sitemap scraper.
+- Which more companies to add to `companies.json` (verify each board token with one request).
+- Paid API provider/model; scheduler choice.

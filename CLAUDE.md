@@ -12,13 +12,13 @@ An AI job-search assistant: finds relevant jobs, scores how well each matches my
 
 1. **Profile**: target roles, skills, experience level, preferred locations, salary range, visa/work-auth, deal-breakers, and my master resume.
 2. **Company sources**: target companies (large MNCs, strong product companies), each with its careers URL and ATS type. Adding a company is a config change, not new code.
-3. **Job fetching** (daily or every 2 days): public ATS APIs first (Greenhouse, Lever, Ashby, Workday). Scrape only public pages with no API, under the rules in *Data sources*. Archive the full JD text at first fetch; postings disappear and I'll need them at interview time.
+3. **Job fetching** (daily or every 2 days): public ATS APIs first (Greenhouse, Lever, Ashby, Workday). Scrape only public pages with no API, under the rules in _Data sources_. Archive the full JD text at first fetch; postings disappear and I'll need them at interview time.
 4. **Normalize → dedupe → hard filters** before any AI work (filters are free; LLM calls are not).
 5. **Embedding**: master resume and JDs are chunked by section, embedded with `nomic-embed-text`, stored in pgvector.
 6. **RAG matching + scoring** (0–100): retrieve relevant resume evidence per job requirement; score skills, seniority, location, salary, domain; store the score, the per-requirement breakdown and a short "why it matches / what's missing".
 7. **Liveness check**: confirm the posting is still open before shortlisting, tailoring or emailing it.
 8. **Shortlist**: 70+ only, sorted by score; email digest and/or exported file (Markdown/CSV).
-9. **Resume tailoring**: LaTeX I can open in Overleaf. **Never invent experience, skills, titles or numbers**: only reorder, reword and emphasise what's in the master resume. Enforced in code (see *No-invention guard*).
+9. **Resume tailoring**: LaTeX I can open in Overleaf. **Never invent experience, skills, titles or numbers**: only reorder, reword and emphasise what's in the master resume. Enforced in code (see _No-invention guard_).
 10. **Apply assist**: pre-fill forms with my details and tailored answers. **Never clicks Submit. No mass auto-apply.**
 11. **Tracking + follow-up**: status history, dates, notes, follow-up reminders.
 
@@ -26,11 +26,11 @@ An AI job-search assistant: finds relevant jobs, scores how well each matches my
 
 Monorepo (npm workspaces). Postgres + pgvector is the bridge between apps.
 
-| App / package     | Does |
-| ----------------- | ---- |
-| `apps/agent`      | Fastify API (port 4000) + worker: fetch, embed, score, tailor, email, scheduler. All AI work. |
+| App / package     | Does                                                                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/agent`      | Fastify API (port 4000) + worker: fetch, embed, score, tailor, email, scheduler. All AI work.                                       |
 | `apps/web`        | Next.js dashboard (port 3000): shortlist, tracker, profile. Reads Postgres; writes only tracker/profile CRUD through the agent API. |
-| `packages/shared` | `Job` / `Match` / `Application` types, Zod schemas, SQL schema + migrations. Defined once, imported everywhere. |
+| `packages/shared` | `Job` / `Match` / `Application` types, Zod schemas, SQL schema + migrations. Defined once, imported everywhere.                     |
 
 - No agent logic in Next.js: Ollama calls can take minutes and the scheduler is long-running.
 - Build `apps/agent` end-to-end first. Add `apps/web` only after the agent produces real matches.
@@ -51,18 +51,21 @@ scheduler (daily / every 2 days, with catch-up after the Mac wakes)
 
 ```
 apps/agent/src/
-  fetchers/      # one file per ATS, all implement Fetcher
-  pipeline/      # normalize.ts, dedupe.ts, filters.ts, liveness.ts
+  fetchers/      # one file per ATS (greenhouse, lever, peoplestrong), all implement Fetcher; http.ts; __fixtures__/
+  lib/           # html-to-text.ts, html-entities.ts
+  pipeline/      # fetch-stage.ts, normalize.ts, url.ts, raw-store.ts; later dedupe.ts, filters.ts, liveness.ts
   ai/            # embed.ts, chunk.ts, retrieve.ts, prompts/, llm-client.ts
   scoring/       # extract.ts, score.ts (pure), explain.ts
   tailoring/     # latex.ts, fact-inventory.ts, guard.ts
   apply/         # playwright prefill (later)
   tracker/       # status transitions, follow-up cadence
-  db/            # client.ts, queries
+  db/            # client.ts, migrate, *-repo.ts (all SQL lives here)
+  config/        # companies.ts: loads + validates config/companies.json
   output/        # report.ts, email.ts
   scheduler.ts, server.ts, index.ts (runs the pipeline once)
 apps/agent/config/
   companies.json      # target companies
+  fetch.ts            # user agent, timeouts, retry, rate limit, raw retention
   llm-routing.ts      # task → local/paid routing (single source of truth)
   scoring.ts          # weights, threshold, hard-filter rules
   follow-ups.ts       # cadence
@@ -74,7 +77,7 @@ apps/agent/data/                # gitignored: resume.pdf, raw/, output/
 
 The schema is `packages/shared/src/db/migrations/0001_init.sql`; read it for columns. Each table has a Zod schema + type in `packages/shared/src/entities/`; dashboard read models are in `views.ts`. Change the schema only by adding a numbered migration (`NNNN_name.sql`); never edit an applied one (the runner checks checksums) and never run ad-hoc `ALTER`s.
 
-- `companies`: id = slug from `companies.json`; `ats`, `ats_key`, `ats_config` jsonb (per-ATS extras such as Workday host + site; shape defined with the fetchers), `tier` 1–3.
+- `companies`: id = slug from `companies.json`; `ats`, `ats_key`, `ats_config` jsonb (per-ATS extras, validated by that ATS's fetcher: Lever `{ region: "eu" }`; Workday host + site later), `tier` 1–3.
 - `jobs`: id (`gh:{board}:{id}`, `wd:{tenant}:{id}`); unique `url_normalized` and `(source, company_id, external_id)` (Workday ids repeat across tenants); salary columns only when the source states them; `embedding vector(768)` + `embedding_model`.
 - `job_chunks`, `resume_versions` (one `is_active`), `resume_chunks`: chunk text + embedding + `embedding_model`.
 - `matches`: **append-only history**, one `is_current` row per job. `hard_filter_result` jsonb; score columns are null when a hard filter failed; `final_score` is stored **0–100**; `breakdown` and `adjustments` jsonb explain the score.
@@ -82,6 +85,7 @@ The schema is `packages/shared/src/db/migrations/0001_init.sql`; read it for col
 - `llm_calls` (cost + daily budget), `fetch_runs` (`jobs_seen` / `jobs_new` / `jobs_closed`), `profile` (single row).
 
 Rules:
+
 - Enum-like columns are `text` + a named `CHECK`; the value lists come from `packages/shared/src/enums.ts`, and an integration test fails if the two drift.
 - SQL is snake_case, TypeScript camelCase: read rows with `parseRows(Schema, rows)` (`db/rows.ts`), which renames columns and validates with Zod.
 - Entity schemas leave out `embedding`; only the AI code reads or writes vectors.
@@ -93,18 +97,18 @@ Statuses: `found → scored → shortlisted → applied → responded → interv
 
 Every LLM call goes through `ai/llm-client.ts` with a task name; routing comes from the config, so moving a task between tiers changes one line.
 
-| Task | Tier | Notes |
-| --- | --- | --- |
-| JD parsing (sections, requirements, years, seniority) | local | |
-| keyword extraction + match vs profile | local | |
-| per-requirement first-pass scoring | local | output is evidence, not a final number |
-| dedup "same job?" check for near-duplicates | local | only when fingerprints collide |
-| final match explanation (shortlist only) | paid | |
-| resume tailoring (LaTeX) | paid | passes through the no-invention guard |
-| application answers | paid | |
+| Task                                                  | Tier  | Notes                                  |
+| ----------------------------------------------------- | ----- | -------------------------------------- |
+| JD parsing (sections, requirements, years, seniority) | local |                                        |
+| keyword extraction + match vs profile                 | local |                                        |
+| per-requirement first-pass scoring                    | local | output is evidence, not a final number |
+| dedup "same job?" check for near-duplicates           | local | only when fingerprints collide         |
+| final match explanation (shortlist only)              | paid  |                                        |
+| resume tailoring (LaTeX)                              | paid  | passes through the no-invention guard  |
+| application answers                                   | paid  |                                        |
 
 - **Local** (Ollama, MacBook Air M5, 16 GB): `qwen2.5:7b` (fallback `llama3.1:8b`), temperature 0 for scoring. Embeddings: `nomic-embed-text` (768 dims). Larger models won't fit next to dev tools.
-- **Paid** (TBD; see *Open decisions*). If Claude: send no `temperature` / `top_p` (rejected on current API versions), use structured outputs validated with Zod, check `stop_reason` (handle `refusal` and `max_tokens`), cache the stable prefix (instructions + master resume) with prompt caching, and use the Batch API (≈50% cheaper) for overnight non-urgent tailoring.
+- **Paid** (TBD; see _Open decisions_). If Claude: send no `temperature` / `top_p` (rejected on current API versions), use structured outputs validated with Zod, check `stop_reason` (handle `refusal` and `max_tokens`), cache the stable prefix (instructions + master resume) with prompt caching, and use the Batch API (≈50% cheaper) for overnight non-urgent tailoring.
 - **Timeouts + fallback**: every local call has a timeout and one retry. If Ollama is down (Mac asleep, low RAM), **defer the job to the next run**; don't silently send high-volume tasks to the paid tier. A task may fall back to paid only if its route says so, and only under the daily budget cap.
 - **Budget cap**: daily `PAID_LLM_BUDGET_USD` in `.env`, checked against `llm_calls` before every paid call; over the cap → queue, don't call.
 
@@ -132,6 +136,19 @@ Every LLM call goes through `ai/llm-client.ts` with a task name; routing comes f
 - LaTeX safety: escape `& % $ # _ { } ~ ^ \` in every inserted string; never emit `\input`, `\include`, `\write18` or shell-escape; generate from a fixed template, the LLM only fills content slots.
 - Tests: fixtures with injected fake numbers, fake skills and inflated titles must all be rejected.
 
+## Two modes: automatic and manual
+
+Kira has two front doors to the **same per-job services**:
+
+- **Automatic**: the scheduled pipeline (fetch → filter → embed → score → shortlist → email) over every new job.
+- **Manual (UI built later)**: I paste a JD (e.g. one a recruiter sent me in a DM), optionally with company, title and URL. Kira stores it as a job with `source = 'manual'`, then runs the same filter → embed → score → tailoring-suggestion → tailor steps on that one job, on demand, and shows the result. I can re-score after editing the JD or after updating my resume.
+
+Rule for every stage built from now on: **expose a per-job function** (`filterJob(jobId)`, `embedJob(jobId)`, `scoreJob(jobId)`, `suggestTailoring(jobId)`, `tailorResume(jobId)`). The pipeline stage is only a loop over new jobs that calls it; the agent API calls the same function for one job. No logic may live only inside a batch loop. Manual jobs are scored even when a hard filter fails (the result shows which filter failed), because I chose to look at them.
+
+**Tailoring suggestion** (shown on every scored job): does a custom resume help for this JD? Output `{ level: none | light | strong, suggestions: string[] }` with 2–4 concrete edits, each pointing at an existing resume line: move a bullet up, use the JD's wording for a skill I already list, put a matching project first. Requirements I don't meet appear as **gaps**, never as resume edits. Computed from the score breakdown in code where possible; a local LLM may phrase the suggestions.
+
+**Master resume**: my Overleaf LaTeX source (`apps/agent/data/resume/main.tex`, gitignored) is the template for tailoring and the source of truth for the fact inventory. The PDF (`apps/agent/data/resume.pdf`) is only a fallback for text extraction.
+
 ## Apply assist (later)
 
 - Playwright with its own browser profile. Fill text fields and dropdowns; **never click Submit**; never touch CAPTCHAs.
@@ -141,7 +158,9 @@ Every LLM call goes through `ai/llm-client.ts` with a task name; routing comes f
 
 ## Data sources: rules
 
-- **OK**: Greenhouse `boards-api.greenhouse.io/v1/boards/{co}/jobs?content=true`; Lever `api.lever.co/v0/postings/{co}?mode=json`; Ashby public posting API; Workday `/wday/cxs/{tenant}/{site}/jobs` (POST; list has no description → fetch detail per job, throttled).
+- **OK**: Greenhouse `boards-api.greenhouse.io/v1/boards/{co}/jobs?content=true`; Lever `api.lever.co/v0/postings/{co}?mode=json`; Ashby public posting API; Workday `/wday/cxs/{tenant}/{site}/jobs` (POST; list has no description → fetch detail per job, throttled); PeopleStrong portals `{tenant}.peoplestrong.com/api/cp/rest/altone/cp/jobs/v1` (POST list) + `/job/{slug}/v2` (detail per new job), which answer without cookies or tokens.
+- **Never send browser cookies, CSRF tokens or copied session headers** (e.g. from a curl exported from DevTools). If an endpoint only works with them, it is not a public API: skip it.
+- **Wipro (`careers.wipro.com`, SuccessFactors)**: its jobs API is under `/services/`, which its `robots.txt` disallows, so it is **not fetched**. Its sitemap and `/job/…` pages are allowed (about 5,900 India postings): a possible later `scrape` adapter.
 - **Scraping** (only when no API): public pages only, no login or user cookies, respect `robots.txt`, ≤1 request/second per host with backoff on 429/5xx, honest User-Agent. If a CAPTCHA or bot challenge appears, stop and log it. Never work around it.
 - **Do NOT scrape LinkedIn, Naukri, Indeed or Glassdoor** (ToS + account bans). Later: read their job-alert emails via the Gmail API.
 - One failing source never stops the run: catch + log per fetcher into `fetch_runs`.
@@ -190,7 +209,11 @@ npm run eval        # score the labeled set and print metrics
 
 ## Conventions
 
-- `interface Fetcher { name: string; fetch(company: Company): Promise<RawJob[]> }`; normalization is separate from fetching.
+- `Fetcher` (`fetchers/types.ts`) has two halves: `fetch(company, ctx)` does the network I/O and returns the payload as received (archived gzipped in `data/raw/` first); `parse(payload, company)` is pure and returns `{ jobs: RawJob[], sightings, skipped }`. Tests feed fixtures to `parse`; no HTTP mocking of real sites.
+- Normalization is separate and pure (`pipeline/normalize.ts`: id, `url_normalized`, fingerprint, hashes). `seniority` and `years_min` stay null until JD parsing exists.
+- All outbound HTTP goes through `fetchers/http.ts` with an explicit host allowlist per request; settings in `config/fetch.ts`.
+- Each posting is validated on its own (Zod); a bad posting is skipped and counted, never fatal for the board.
+- Code ported from career-ops carries a header naming its source; the licence is in `THIRD_PARTY_NOTICES.md`.
 - Shared types and Zod schemas come from `packages/shared`; never redefine them in an app.
 - Model names, thresholds, weights and cadences come from config/`.env`, never hardcoded.
 - Strip HTML before embedding. Chunk instead of truncating; if something must be cut, log it.
@@ -224,8 +247,8 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 - Keep modules small and testable; include tests for core logic.
 - Point out cost, rate-limit, scraping-ToS and privacy risks when they come up.
 - When a requirement is unclear, ask instead of guessing.
-- Git: commit after each completed task with a clear message. Never push; I push myself.
-- Before ending a session, or when I'm near my limit: update *Current status* below and append to `PROGRESS.md` (done, next, open decisions) so the next session continues without re-explaining.
+<!-- - Git: commit after each completed task with a clear message. Never push; I push myself. -->
+- Before ending a session, or when I'm near my limit: update _Current status_ below and append to `PROGRESS.md` (done, next, open decisions) so the next session continues without re-explaining.
 
 ## Open decisions
 
@@ -240,8 +263,9 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 - [x] Skeleton (stubs, no domain logic):
   - agent: Zod env, pg pool, `/health` (DB + Ollama, 503 when degraded), `buildApp()` for tests, `runPipeline()` with 8 stub stages (`pipeline/stages.ts`), Vitest (4 tests)
   - web: header + agent health badge, Shortlist, Job detail, Tracker, Profile pages
-- [x] Data model: enums + entity Zod schemas, `0001_init.sql`, migration runner (`db:migrate`), dev seed (`db:seed`); web pages read Postgres (`lib/data.ts`). The DB currently holds **dev-seed rows** (fictional companies): wipe with `docker-compose down -v` before the first real fetch.
-- [ ] Fetchers: Greenhouse, Lever, Ashby, Workday
+- [x] Data model: enums + entity Zod schemas, `0001_init.sql`, migration runner (`db:migrate`), dev seed (`db:seed`); web pages read Postgres (`lib/data.ts`).
+- [x] Fetch stage: Greenhouse, Lever, PeopleStrong fetchers; companies sync from `companies.json`; raw archive (7 days); `fetch_runs`; normalize + upsert. `npm run run:agent` stores real jobs (first run 2026-11-11: 1,089 jobs from Stripe, Paytm, CRED, BMW TechWorks). The DB now holds **real data**: don't run `db:seed` or wipe the volume casually.
+- [ ] Fetchers still to do: Ashby, Workday; marking jobs closed after 2 missed runs
 - [ ] Normalize, dedupe, hard filters
 - [ ] Embedding + pgvector retrieval
 - [ ] Scoring engine + eval set
@@ -251,7 +275,9 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 - [ ] Web dashboard
 - [ ] Apply assist
 
-Local setup still needed: `ollama pull qwen2.5:7b`, `ollama pull nomic-embed-text` (only `qwen2.5-coder:7b-instruct` is installed). `npm run eval` doesn't exist yet.
+- [ ] Manual mode: paste a JD in the UI → score, tailoring suggestion, custom resume (after tailoring exists)
+
+Local setup: Ollama 0.34 running with `qwen2.5:7b` and `nomic-embed-text` (`llama3.1:8b` fallback not pulled). Resume files still to place: `apps/agent/data/resume/main.tex` (Overleaf → Menu → Download → Source) and `apps/agent/data/resume.pdf`. `npm run eval` doesn't exist yet.
 
 ## Usage notes (temporary; remove after Nov 17, 2026)
 

@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { createPool } from "./db/client.ts";
 import { loadEnv } from "./env.ts";
 import { runPipeline } from "./pipeline/run.ts";
 import { PIPELINE_STAGES } from "./pipeline/stages.ts";
@@ -7,10 +8,13 @@ import { PIPELINE_STAGES } from "./pipeline/stages.ts";
 // the same runPipeline().
 const env = loadEnv();
 const log = pino({ level: env.LOG_LEVEL });
+const db = createPool(env.DATABASE_URL);
 
 try {
-  await runPipeline(PIPELINE_STAGES, log);
+  await runPipeline(PIPELINE_STAGES, { log, db });
 } catch (err) {
   log.fatal({ err }, "pipeline failed");
-  process.exit(1);
+  process.exitCode = 1;
+} finally {
+  await db.end();
 }

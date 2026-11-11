@@ -4,7 +4,7 @@ import { runPipeline, type Stage } from "./run.ts";
 
 const log = pino({ level: "silent" });
 
-function recorder(name: string, calls: string[], fail = false): Stage {
+function recorder(name: string, calls: string[], fail = false): Stage<{ log: typeof log }> {
   return {
     name,
     async run() {
@@ -17,7 +17,7 @@ function recorder(name: string, calls: string[], fail = false): Stage {
 describe("runPipeline", () => {
   it("runs stages in order", async () => {
     const calls: string[] = [];
-    await runPipeline([recorder("a", calls), recorder("b", calls), recorder("c", calls)], log);
+    await runPipeline([recorder("a", calls), recorder("b", calls), recorder("c", calls)], { log });
     expect(calls).toEqual(["a", "b", "c"]);
   });
 
@@ -25,7 +25,7 @@ describe("runPipeline", () => {
     const calls: string[] = [];
     const stages = [recorder("a", calls), recorder("b", calls, true), recorder("c", calls)];
 
-    await expect(runPipeline(stages, log)).rejects.toThrow("b failed");
+    await expect(runPipeline(stages, { log })).rejects.toThrow("b failed");
     expect(calls).toEqual(["a", "b"]);
   });
 });

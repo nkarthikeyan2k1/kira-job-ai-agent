@@ -39,7 +39,7 @@ export const APPLICATION_STATUSES = [
 export const ApplicationStatusSchema = z.enum(APPLICATION_STATUSES);
 export type ApplicationStatus = z.infer<typeof ApplicationStatusSchema>;
 
-export const ATS_TYPES = ["greenhouse", "lever", "ashby", "workday", "scrape"] as const;
+export const ATS_TYPES = ["greenhouse", "lever", "ashby", "workday", "peoplestrong", "scrape"] as const;
 export const AtsTypeSchema = z.enum(ATS_TYPES);
 export type AtsType = z.infer<typeof AtsTypeSchema>;
 

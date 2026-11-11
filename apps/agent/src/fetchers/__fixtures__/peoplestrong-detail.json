@@ -1,0 +1,38 @@
+{
+ "response": {
+  "jobDescription": "<div dir=\"auto\"><h1 dir=\"auto\" tabindex=\"-1\">Principal Engineer / Architect &mdash; System Health</h1><a aria-label=\"Permalink: Principal Engineer / Architect — System Health\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#principal-engineer--architect--system-health\"></a></div><div dir=\"auto\"><h2 dir=\"auto\" tabindex=\"-1\">Unit and team Overview</h2><a aria-label=\"Permalink: Unit and team Overview\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#unit-and-team-overview\"></a></div><p dir=\"auto\">This project is part of the infotainment and vehicle software platform from BMW. It focuses on maintaining and evolving the System Health components: recovery of systemd services, system watchdog functionality, and filesystem recovery &mdash; operating across the Linux and Android layers of the infotainment system. These components deliver highly configurable recovery mechanisms that ensure reliability and resilience of critical system services.</p><p dir=\"auto\">We are looking for a Principal Engineer with a strong architectural background to take ownership of the System Health components. You will ensure their stability, quality, and continued evolution, drive architectural decisions, and maintain interface contracts across component boundaries.</p><div dir=\"auto\"><h2 dir=\"auto\" tabindex=\"-1\">Job Description</h2><a aria-label=\"Permalink: Job Description\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#job-description\"></a></div><p dir=\"auto\">As a Principal Engineer and Architect in the System Health team, you will own the technical quality and architectural direction of the recovery subsystem. You will combine hands-on software development with architectural work, ensuring that components remain robust, maintainable, and well-integrated across Linux and Android. You will drive code quality, support technical decisions, and maintain design standards across the team.</p><div dir=\"auto\"><h3 dir=\"auto\" tabindex=\"-1\">Key Responsibilities</h3><a aria-label=\"Permalink: Key Responsibilities\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#key-responsibilities\"></a></div><p dir=\"auto\"><strong>Technical Ownership &amp; Development</strong></p><ul dir=\"auto\"><li>Maintain and implement features for systemd service recovery, system watchdog, and filesystem recovery components on Linux and Android.</li><li>Diagnose and resolve bugs and field issues, ensuring reliable and predictable recovery behavior in production environments.</li><li>Ensure components remain highly configurable and well-tested across supported hardware targets.</li><li>Contribute to and oversee CI pipelines; ensure quality tools (static analysis, coverage, linters) run correctly and results are acted upon.</li></ul><p dir=\"auto\"><strong>Code Quality &amp; Principal Engineering</strong></p><ul dir=\"auto\"><li>Lead and conduct thorough code reviews with a focus on correctness, maintainability, and design quality.</li><li>Propose and enforce good code and design practices within the team.</li><li>Identify and address technical debt proactively; argue for quality investments in planning.</li><li>Set and uphold quality standards for the team&#39;s Definition of Done.</li></ul><p dir=\"auto\"><strong>Architecture &amp; Interfaces</strong></p><ul dir=\"auto\"><li>Create and maintain architecture documents for System Health components.</li><li>Define and maintain inter-process interfaces (CommonAPI, AIDL, HAL interfaces as applicable).</li><li>Write and review software requirements in collaboration with product stakeholders.</li><li>Evaluate feasibility of new features against the current architecture; identify risks and propose solutions.</li><li>Ensure architectural consistency across the Linux and Android layers.</li></ul><div dir=\"auto\"><h2 dir=\"auto\" tabindex=\"-1\">Qualifications</h2><a aria-label=\"Permalink: Qualifications\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#qualifications\"></a></div><div dir=\"auto\"><h3 dir=\"auto\" tabindex=\"-1\">Basic requirements and Education</h3><a aria-label=\"Permalink: Basic requirements and Education\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#basic-requirements-and-education\"></a></div><ul dir=\"auto\"><li>Business fluent English</li><li>University degree in computer science or a comparable field of study</li></ul><div dir=\"auto\"><h3 dir=\"auto\" tabindex=\"-1\">Required Experience and Skills</h3><a aria-label=\"Permalink: Required Experience and Skills\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#required-experience-and-skills\"></a></div><ul dir=\"auto\"><li>Strong knowledge of Linux systems programming: systemd, process management, filesystem concepts, system recovery mechanisms.</li><li>Solid C++17 or newer development experience, with focus on clean design and maintainability.</li><li>Experience with embedded Linux software development and integration.</li><li>Ability to create and maintain architecture documents and interface specifications.</li><li>Experience with code review practices and enforcing software quality standards.</li></ul><div dir=\"auto\"><h3 dir=\"auto\" tabindex=\"-1\">Good to Have</h3><a aria-label=\"Permalink: Good to Have\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#good-to-have\"></a></div><ul dir=\"auto\"><li>Android platform knowledge, with focus on system-level development across multiple layers of the Android stack.</li><li>Experience with Bitbake / Yocto build systems.</li><li>Familiarity with SELinux.</li><li>Familiarity with CI systems and quality tooling (static analysis, coverage, linting pipelines).</li><li>Experience writing software requirements or functional specifications.</li></ul><div dir=\"auto\"><h2 dir=\"auto\" tabindex=\"-1\">Keywords</h2><a aria-label=\"Permalink: Keywords\" href=\"https://cc-github.bmwgroup.net/akiraesaenen/bti-jd-docs/blob/622bcb4000a0059f19193945c6aab76d44b7aa6e/roles/pe_syshealth.md#keywords\"></a></div><ul dir=\"auto\"><li>Linux</li><li>systemd</li><li>C++</li><li>Recovery</li><li>Embedded systems</li><li>Android</li></ul>",
+  "minimumExp": "8",
+  "maximumExp": "12",
+  "employmentType": "Full Time",
+  "skills": [
+   {
+    "text": "Linux",
+    "mandatory": false
+   },
+   {
+    "text": "C++",
+    "mandatory": false
+   },
+   {
+    "text": "Recovery",
+    "mandatory": false
+   },
+   {
+    "text": "Embedded Systems",
+    "mandatory": false
+   },
+   {
+    "text": "Android",
+    "mandatory": false
+   }
+  ],
+  "qualifications": [
+   "B.Tech/BE"
+  ],
+  "jobTitle": "Principal Engineer / Architect - System Health",
+  "requisitionCode": "BTWI/PE-A-SH/1738338",
+  "requisitionStatus": "OPEN",
+  "hiringManagerName": "REDACTED (fixture): the real response names a person here",
+  "Username": "redacted@example.com"
+ }
+}

@@ -6,5 +6,9 @@ const rootEnv = new URL("../../.env", import.meta.url);
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
 export default defineConfig({
-  test: { include: ["src/**/*.test.ts"] },
+  test: {
+    include: ["src/**/*.test.ts"],
+    // The integration tests share one test database, so files run one at a time.
+    fileParallelism: false,
+  },
 });

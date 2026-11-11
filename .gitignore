@@ -8,3 +8,6 @@ dist/
 
 # agent data
 apps/agent/data/
+
+# DevTools curl exports: contain session cookies and tokens
+JOBSCURLS.md

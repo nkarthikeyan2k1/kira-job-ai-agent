@@ -1,10 +1,36 @@
+import type pg from "pg";
+import type { Logger } from "pino";
+import { FETCH_CONFIG } from "../../config/fetch.ts";
+import { loadCompaniesConfig } from "../config/companies.ts";
+import { createHttpClient } from "../fetchers/http.ts";
+import { FETCHERS } from "../fetchers/registry.ts";
+import { runFetchStage } from "./fetch-stage.ts";
 import type { Stage } from "./run.ts";
 
-// The run order from CLAUDE.md's architecture diagram. Every stage is a stub
-// until it is designed and built.
-export const PIPELINE_STAGES: readonly Stage[] = [
-  stub("fetch"), // [1] one adapter per ATS, raw JSON kept 7 days
-  stub("normalize-dedupe-filter"), // [2] no LLM
+export interface StageContext {
+  log: Logger;
+  db: pg.Pool;
+}
+
+// The run order from CLAUDE.md's architecture diagram. Stages still to be
+// built are stubs.
+export const PIPELINE_STAGES: readonly Stage<StageContext>[] = [
+  {
+    name: "fetch", // [1] one adapter per ATS, raw payloads kept 7 days; jobs are normalized before storing
+    async run({ db, log }) {
+      const results = await runFetchStage({
+        db,
+        log,
+        http: createHttpClient({ userAgent: FETCH_CONFIG.userAgent, ...FETCH_CONFIG.http }),
+        fetchers: FETCHERS,
+        companies: await loadCompaniesConfig(),
+        rawDir: FETCH_CONFIG.rawDir,
+        rawRetentionDays: FETCH_CONFIG.rawRetentionDays,
+      });
+      log.info({ results }, "fetch summary");
+    },
+  },
+  stub("dedupe-filter"), // [2] cross-source duplicates, reposts, hard filters; no LLM
   stub("embed"), // [3] nomic-embed-text → pgvector, top-N vs resume
   stub("extract"), // [4] per-requirement evidence, local LLM
   stub("score"), // [5] deterministic, threshold from config
@@ -13,7 +39,7 @@ export const PIPELINE_STAGES: readonly Stage[] = [
   stub("output"), // [8] digest email, export, tracker rows
 ];
 
-function stub(name: string): Stage {
+function stub(name: string): Stage<StageContext> {
   return {
     name,
     async run({ log }) {
