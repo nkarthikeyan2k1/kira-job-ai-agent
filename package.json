@@ -10,8 +10,11 @@
     "dev:agent": "npm run dev -w apps/agent",
     "run:agent": "npm run pipeline -w apps/agent",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down",
-    "test": "npm run test --workspaces --if-present"
+    "db:up": "docker-compose up -d --wait",
+    "db:down": "docker-compose down",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "npm run db:migrate -w apps/agent --",
+    "db:seed": "npm run db:seed -w apps/agent",
+    "db:create-test": "docker-compose exec -T db createdb -U postgres jobagent_test"
   }
 }

@@ -33,3 +33,30 @@ Newest entry at the bottom. Each session appends: what was done, what's next, op
 - Paid API provider/model.
 - Scheduler: node-cron vs pg-boss vs BullMQ + Redis.
 - Stages currently share no in-memory state; suggested: they communicate through Postgres so each can be re-run alone. Confirm in the design review.
+
+## 2026-11-11 (data model, Fable)
+
+**Done**
+- `npm run db:up` fixed: scripts call the standalone `docker-compose`, with a healthcheck + `--wait`.
+- `packages/shared`: `enums.ts`, one Zod schema per table in `entities/`, Zod-backed read models (`views.ts`), `parseRows`/`camelizeRow`.
+- `0001_init.sql`: 11 tables, HNSW indexes on `jobs` and `job_chunks`, named CHECKs mirroring the shared enums.
+- Migration runner (`npm run db:migrate`, `-- --status`): forward-only, advisory lock, checksum check, one transaction per file.
+- Web reads Postgres (`lib/db.ts`, `lib/data.ts`); sample data and banner removed. Dev seed: `npm run db:seed`.
+- Tests: 38 passing (migration planning, row mapping, entity schemas, integration test on `jobagent_test` incl. enum-vs-CHECK drift).
+- Verified on a fresh volume: migrate applies, second run is a no-op; typecheck, lint, web build pass.
+
+**Decisions made (differ from the earlier CLAUDE.md, now updated there)**
+- Job unique key is `(source, company_id, external_id)`.
+- `matches` is append-only with `is_current`; `final_score` stored 0–100.
+- `applications` rows start at `shortlisted`; the Shortlist page lists jobs that have an application row (no threshold in the web app).
+- `profile` is a single-row table.
+
+**Next (Fable)**
+- Greenhouse + Lever fetchers: `Fetcher`/`RawJob` types, HTTP helper, `companies.json` schema + sync into `companies`, per-ATS `ats_config` shape, `fetch_runs` logging. Read career-ops providers first.
+- Before the first real fetch: `docker-compose down -v && npm run db:up && npm run db:migrate` to drop the dev-seed rows.
+
+**Open decisions**
+- Paid API provider/model.
+- Scheduler: node-cron vs pg-boss vs BullMQ + Redis.
+- Seniority bands (`intern…manager`) and `tier` meaning (1 = top target) are my defaults; change by migration if wrong.
+- Agent API routes for profile/tracker writes are not built.

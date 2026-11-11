@@ -8,7 +8,9 @@
     "start": "tsx --env-file-if-exists=../../.env src/server.ts",
     "typecheck": "tsc --noEmit",
     "pipeline": "tsx --env-file-if-exists=../../.env src/index.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:migrate": "tsx --env-file-if-exists=../../.env src/db/migrate-cli.ts",
+    "db:seed": "tsx --env-file-if-exists=../../.env src/db/seed-dev.ts"
   },
   "dependencies": {
     "@kira/shared": "*",

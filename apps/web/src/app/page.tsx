@@ -7,7 +7,7 @@ import { formatDate, jobHref } from "@/lib/format";
 export default function ShortlistPage() {
   return (
     <>
-      <PageHeader title="Shortlist" description="Jobs scoring 70+ against your resume, highest first." />
+      <PageHeader title="Shortlist" description="Jobs the agent shortlisted against your resume, highest score first." />
       <Suspense fallback={<LoadingRows />}>
         <ShortlistTable />
       </Suspense>

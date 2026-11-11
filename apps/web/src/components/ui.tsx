@@ -1,4 +1,4 @@
-import type { ApplicationStatus } from "@kira/shared";
+import type { JobStatus } from "@kira/shared";
 import type { ReactNode } from "react";
 
 export function PageHeader({ title, description }: { title: string; description?: string }) {
@@ -24,7 +24,7 @@ export function ScoreBadge({ score }: { score: number }) {
   );
 }
 
-const STATUS_TONE: Record<ApplicationStatus, string> = {
+const STATUS_TONE: Record<JobStatus, string> = {
   found: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   scored: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   shortlisted: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300",
@@ -39,7 +39,7 @@ const STATUS_TONE: Record<ApplicationStatus, string> = {
   closed: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
-export function StatusPill({ status }: { status: ApplicationStatus }) {
+export function StatusPill({ status }: { status: JobStatus }) {
   return (
     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${STATUS_TONE[status]}`}>
       {status}

@@ -1,39 +1,47 @@
-import type { ApplicationStatus } from "./status.ts";
-import type { RequirementResult } from "./scoring.ts";
+import { z } from "zod";
+import { JobStatusSchema } from "./enums.ts";
+import { ApplicationSchema } from "./entities/application.ts";
+import { CompanySchema } from "./entities/company.ts";
+import { JobSchema } from "./entities/job.ts";
+import { MatchSchema } from "./entities/match.ts";
 
-// Read models for the dashboard. Provisional: the jobs/matches tables are not
-// designed yet, so these mirror CLAUDE.md's data model and will be revised
-// together with the first migration.
+// Read models for the dashboard: each is the shape of one joined query row,
+// built from the entity schemas so a column is described in exactly one place.
 
-export type RemoteType = "onsite" | "hybrid" | "remote";
+export const MatchSummarySchema = JobSchema.pick({
+  title: true,
+  location: true,
+  remoteType: true,
+  url: true,
+  firstSeen: true,
+}).extend({
+  jobId: JobSchema.shape.id,
+  company: CompanySchema.shape.name,
+  finalScore: z.number().min(0).max(100), // only scored matches are listed
+  reason: MatchSchema.shape.reason,
+  status: JobStatusSchema, // application status, or "scored" when there is none yet
+});
+export type MatchSummary = z.infer<typeof MatchSummarySchema>;
 
-export interface MatchSummary {
-  jobId: string;
-  company: string;
-  title: string;
-  location: string | null;
-  remoteType: RemoteType | null;
-  url: string;
-  finalScore: number; // 0–100
-  reason: string;
-  status: ApplicationStatus;
-  firstSeen: string; // ISO date
-}
+export const MatchDetailSchema = MatchSummarySchema.extend(
+  MatchSchema.pick({
+    similarity: true,
+    llmScore: true,
+    matchedSkills: true,
+    missingSkills: true,
+    breakdown: true,
+  }).shape,
+);
+export type MatchDetail = z.infer<typeof MatchDetailSchema>;
 
-export interface MatchDetail extends MatchSummary {
-  similarity: number; // cosine similarity, 0–1 (rescaled per run)
-  llmScore: number; // 0–100, computed in code from the breakdown
-  matchedSkills: string[];
-  missingSkills: string[];
-  breakdown: RequirementResult[];
-}
-
-export interface ApplicationRow {
-  jobId: string;
-  company: string;
-  title: string;
-  status: ApplicationStatus;
-  appliedAt: string | null;
-  nextFollowUpAt: string | null;
-  notes: string | null;
-}
+export const ApplicationRowSchema = ApplicationSchema.pick({
+  jobId: true,
+  status: true,
+  appliedAt: true,
+  nextFollowUpAt: true,
+  notes: true,
+}).extend({
+  company: CompanySchema.shape.name,
+  title: JobSchema.shape.title,
+});
+export type ApplicationRow = z.infer<typeof ApplicationRowSchema>;

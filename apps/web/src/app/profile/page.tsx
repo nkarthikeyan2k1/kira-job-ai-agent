@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Card, Chip, LoadingRows, PageHeader } from "@/components/ui";
+import { Card, Chip, EmptyState, LoadingRows, PageHeader } from "@/components/ui";
 import { getProfile } from "@/lib/data";
 
 export default function ProfilePage() {
@@ -18,6 +18,11 @@ export default function ProfilePage() {
 
 async function ProfileDetails() {
   const profile = await getProfile();
+  if (!profile) return <EmptyState>No profile saved yet.</EmptyState>;
+
+  const salary =
+    profile.salaryMin === null ? null : `${profile.salaryMin.toLocaleString("en-IN")} ${profile.salaryCurrency ?? ""}`.trim();
+  const sponsorship = profile.needsSponsorship === null ? null : profile.needsSponsorship ? "Needs sponsorship" : "No sponsorship needed";
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -28,22 +33,26 @@ async function ProfileDetails() {
         <ChipList items={profile.skills} />
       </Card>
       <Card title="Experience">
-        <Field value={profile.experienceYears === null ? null : `${profile.experienceYears} years`} />
+        <Field
+          value={[profile.experienceYears === null ? null : `${profile.experienceYears} years`, profile.seniority]
+            .filter(Boolean)
+            .join(" · ")}
+        />
       </Card>
       <Card title="Preferred locations">
         <ChipList items={profile.locations} />
       </Card>
-      <Card title="Salary range">
-        <Field value={profile.salaryRange} />
+      <Card title="Work style">
+        <ChipList items={profile.remoteTypes} />
+      </Card>
+      <Card title="Minimum salary">
+        <Field value={salary} />
       </Card>
       <Card title="Work authorisation">
-        <Field value={profile.workAuth} />
+        <Field value={[profile.workAuth, sponsorship].filter(Boolean).join(" · ")} />
       </Card>
       <Card title="Deal-breakers">
         <ChipList items={profile.dealBreakers} />
-      </Card>
-      <Card title="Master resume">
-        <Field value={profile.resumeVersion} />
       </Card>
     </div>
   );

@@ -70,23 +70,24 @@ apps/agent/evals/labeled.json   # hand-labeled jobs for tuning
 apps/agent/data/                # gitignored: resume.pdf, raw/, output/
 ```
 
-## Data model (`packages/shared/src/db/`)
+## Data model (`packages/shared`)
 
-Use migrations (numbered SQL files), never ad-hoc `ALTER`s.
+The schema is `packages/shared/src/db/migrations/0001_init.sql`; read it for columns. Each table has a Zod schema + type in `packages/shared/src/entities/`; dashboard read models are in `views.ts`. Change the schema only by adding a numbered migration (`NNNN_name.sql`); never edit an applied one (the runner checks checksums) and never run ad-hoc `ALTER`s.
 
-- `companies`: name, ats (`greenhouse|lever|ashby|workday|scrape`), ats_key / tenant, careers_url, enabled, tier.
-- `jobs`: id (`gh:{board}:{id}`, `wd:{tenant}:{id}`), company_id, source, external_id, url, url_normalized (unique), fingerprint, title, location, location_norm, remote_type, seniority, years_min, salary_min / salary_max / currency (only when the source states them; never inferred), description (clean text), description_hash, posted_at, first_seen, last_seen, closed_at, embedding `vector(768)`.
-- `job_chunks`: job_id, section (`requirements|responsibilities|about|benefits`), content, embedding.
-- `resume_versions` + `resume_chunks`: version, section, content, embedding. Scores record which resume version they used.
-- `matches`: job_id, resume_version, similarity, similarity_norm, llm_score, final_score, breakdown `jsonb` (per requirement: weight, met/partial/missing, evidence quote), matched_skills, missing_skills, reason, hard_filter_result, model, prompt_version, scored_at.
-- `applications`: job_id, status, applied_at, next_follow_up_at, follow_up_count, resume_path, notes.
-- `application_events`: application_id, from_status, to_status, at, note. Never overwrite history; analytics come from here.
-- `llm_calls`: task, tier, model, tokens_in, tokens_out, cost_usd, latency_ms, ok, error, created_at. Cost tracking and daily budget.
-- `fetch_runs`: company_id, started_at, finished_at, seen, new, closed, error.
+- `companies`: id = slug from `companies.json`; `ats`, `ats_key`, `ats_config` jsonb (per-ATS extras such as Workday host + site; shape defined with the fetchers), `tier` 1–3.
+- `jobs`: id (`gh:{board}:{id}`, `wd:{tenant}:{id}`); unique `url_normalized` and `(source, company_id, external_id)` (Workday ids repeat across tenants); salary columns only when the source states them; `embedding vector(768)` + `embedding_model`.
+- `job_chunks`, `resume_versions` (one `is_active`), `resume_chunks`: chunk text + embedding + `embedding_model`.
+- `matches`: **append-only history**, one `is_current` row per job. `hard_filter_result` jsonb; score columns are null when a hard filter failed; `final_score` is stored **0–100**; `breakdown` and `adjustments` jsonb explain the score.
+- `applications`: created when a job is **shortlisted** (`found`/`scored` are derived, never stored). `application_events` is the append-only status history.
+- `llm_calls` (cost + daily budget), `fetch_runs` (`jobs_seen` / `jobs_new` / `jobs_closed`), `profile` (single row).
 
-Indexes: HNSW on embeddings (`vector_cosine_ops`); unique `url_normalized` and `(source, external_id)`; btree on `fingerprint`, `final_score`, `applications.next_follow_up_at`.
+Rules:
+- Enum-like columns are `text` + a named `CHECK`; the value lists come from `packages/shared/src/enums.ts`, and an integration test fails if the two drift.
+- SQL is snake_case, TypeScript camelCase: read rows with `parseRows(Schema, rows)` (`db/rows.ts`), which renames columns and validates with Zod.
+- Entity schemas leave out `embedding`; only the AI code reads or writes vectors.
+- Not in the schema yet (later migrations): repost/duplicate links, drafted application answers, scheduler tables.
 
-Statuses: `found → scored → shortlisted → applied → responded → interview → offer | rejected`, plus `skipped` (my decision), `ghosted` (no reply after max follow-ups), `withdrawn`, `closed` (posting gone). Transitions are validated in one place (`tracker/`), not scattered.
+Statuses: `found → scored → shortlisted → applied → responded → interview → offer | rejected`, plus `skipped` (my decision), `ghosted` (no reply after max follow-ups), `withdrawn`, `closed` (posting gone). `JobStatus` = all 12 (display); `ApplicationStatus` = the 10 stored. Transitions are validated in one place (`tracker/`), not scattered.
 
 ## LLM routing (`apps/agent/config/llm-routing.ts`)
 
@@ -165,8 +166,8 @@ Every LLM call goes through `ai/llm-client.ts` with a task name; routing comes f
 - Node.js 24 + TypeScript (strict), ESM, `tsx`; npm workspaces
 - `apps/agent`: Fastify 5, loads root `.env` via `--env-file-if-exists`
 - `apps/web`: Next.js 16 (App Router, `src/`, Tailwind 4)
-- PostgreSQL 16 + pgvector via `docker compose` (`pgvector/pgvector:pg16`, db `jobagent`) on host port **5433** (5432 is a local Homebrew Postgres 17, not ours); Docker CLI with Colima, no Docker Desktop
-- Vitest (agent tests), pino logs
+- PostgreSQL 16 + pgvector via `docker-compose` (standalone binary; the `docker compose` plugin isn't set up on this Mac) (`pgvector/pgvector:pg16`, db `jobagent`) on host port **5433** (5432 is a local Homebrew Postgres 17, not ours); Docker CLI with Colima, no Docker Desktop
+- Vitest (agent + shared), pino logs. Integration tests run only when `TEST_DATABASE_URL` is set and wipe that database (must end in `_test`)
 - Ollama: `qwen2.5:7b`, `llama3.1:8b`, `nomic-embed-text`
 - Zod for every external input (API payloads, LLM output, config)
 - Nodemailer (Gmail app password), `pdf-parse` for resume import, Playwright for apply assist
@@ -175,7 +176,10 @@ Every LLM call goes through `ai/llm-client.ts` with a task name; routing comes f
 
 ```bash
 colima start        # Docker runtime
-npm run db:up       # Postgres + pgvector
+npm run db:up       # Postgres + pgvector (docker-compose; waits until healthy)
+npm run db:migrate  # apply pending migrations (-- --status to list)
+npm run db:seed     # dev only: fictional rows, empty DB only
+npm run db:create-test  # once: create jobagent_test for integration tests
 npm run dev:agent   # agent in watch mode
 npm run run:agent   # run the full pipeline once
 npm run dev:web     # dashboard
@@ -195,6 +199,7 @@ npm run eval        # score the labeled set and print metrics
 - Structured logs (Fastify's pino). `/health` reports DB and Ollama status.
 - Nothing is compiled: `tsx` runs the agent and Next compiles `@kira/shared` (`transpilePackages`). Relative imports therefore use **`.ts`** extensions (`allowImportingTsExtensions`), never `.js`; Turbopack can't map `.js` → `.ts`.
 - Env is read once through `apps/agent/src/env.ts` (Zod); never read `process.env` elsewhere in the agent.
+- The web app loads the root `.env` in `next.config.ts` and reads Postgres through `apps/web/src/lib/db.ts` + `data.ts` (`server-only`); it never writes.
 - Next.js 16 runs with Cache Components: every uncached read (DB, fetch, `params`) sits inside `<Suspense>`. Read `apps/web/node_modules/next/dist/docs/` (or root `node_modules/next/dist/docs/`) before using a Next API; it differs from older versions.
 
 ## Testing + evals
@@ -234,9 +239,8 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 - [x] Monorepo scaffold: `apps/agent` (Fastify `/health`), `apps/web` (default Next.js page), `docker-compose.yml` (pgvector)
 - [x] Skeleton (stubs, no domain logic):
   - agent: Zod env, pg pool, `/health` (DB + Ollama, 503 when degraded), `buildApp()` for tests, `runPipeline()` with 8 stub stages (`pipeline/stages.ts`), Vitest (4 tests)
-  - web: header + agent health badge, Shortlist, Job detail, Tracker, Profile pages; all data from `src/lib/data.ts` → **sample data** (`src/lib/sample-data.ts`, delete once Postgres is wired)
-  - shared: statuses, ATS types, `RequirementResultSchema`, `HealthResponseSchema`, provisional view types (`views.ts`)
-- [ ] `packages/shared`: real `Job` / `Match` / `Application` / `Company` / `Profile` schemas, migrations
+  - web: header + agent health badge, Shortlist, Job detail, Tracker, Profile pages
+- [x] Data model: enums + entity Zod schemas, `0001_init.sql`, migration runner (`db:migrate`), dev seed (`db:seed`); web pages read Postgres (`lib/data.ts`). The DB currently holds **dev-seed rows** (fictional companies): wipe with `docker-compose down -v` before the first real fetch.
 - [ ] Fetchers: Greenhouse, Lever, Ashby, Workday
 - [ ] Normalize, dedupe, hard filters
 - [ ] Embedding + pgvector retrieval
@@ -247,7 +251,7 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 - [ ] Web dashboard
 - [ ] Apply assist
 
-Local setup still needed: add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json` so `docker compose` finds the Homebrew plugin (until then, `docker-compose up -d` works), `ollama pull qwen2.5:7b`, `ollama pull nomic-embed-text` (only `qwen2.5-coder:7b-instruct` is installed). Done: `.env`, Compose 5.7 installed, DB up on 5433 with pgvector 0.8.7. `npm run eval` doesn't exist yet.
+Local setup still needed: `ollama pull qwen2.5:7b`, `ollama pull nomic-embed-text` (only `qwen2.5-coder:7b-instruct` is installed). `npm run eval` doesn't exist yet.
 
 ## Usage notes (temporary; remove after Nov 17, 2026)
 

@@ -47,16 +47,20 @@ async function JobDetail({ jobId }: { jobId: string }) {
           <div className="flex items-center gap-2">
             <ScoreBadge score={match.finalScore} /> <span className="text-zinc-500">final</span>
           </div>
-          <div>
-            <span className="font-medium tabular-nums">{Math.round(match.similarity * 100)}%</span>{" "}
-            <span className="text-zinc-500">similarity</span>
-          </div>
-          <div>
-            <span className="font-medium tabular-nums">{match.llmScore}</span>{" "}
-            <span className="text-zinc-500">requirements score</span>
-          </div>
+          {match.similarity !== null && (
+            <div>
+              <span className="font-medium tabular-nums">{Math.round(match.similarity * 100)}%</span>{" "}
+              <span className="text-zinc-500">similarity</span>
+            </div>
+          )}
+          {match.llmScore !== null && (
+            <div>
+              <span className="font-medium tabular-nums">{match.llmScore}</span>{" "}
+              <span className="text-zinc-500">requirements score</span>
+            </div>
+          )}
         </div>
-        <p className="mt-3 text-sm">{match.reason}</p>
+        {match.reason && <p className="mt-3 text-sm">{match.reason}</p>}
       </Card>
 
       <Card title="Skills">

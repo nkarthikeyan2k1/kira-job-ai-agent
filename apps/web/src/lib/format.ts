@@ -5,8 +5,8 @@ const dateFormat = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
 });
 
-export function formatDate(iso: string | null): string {
-  return iso ? dateFormat.format(new Date(iso)) : "—";
+export function formatDate(date: Date | null): string {
+  return date ? dateFormat.format(date) : "—";
 }
 
 export function jobHref(jobId: string): string {

@@ -7,6 +7,12 @@ services:
       POSTGRES_DB: jobagent
     ports: ["5433:5432"] # 5432 is taken by a local Homebrew Postgres
     volumes: [pgdata:/var/lib/postgresql/data]
+    # `docker-compose up --wait` returns only once this passes.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jobagent"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
 volumes:
   pgdata:
