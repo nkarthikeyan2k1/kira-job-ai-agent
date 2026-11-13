@@ -28,13 +28,17 @@ export function isWorkModelOnly(location: string): boolean {
   return parts.length > 0 && parts.every((part) => WORK_MODEL.test(part));
 }
 
-// Some boards put the work model in location.name and the city in offices[].
-// Only then are the office names appended, sorted so the string is stable.
+// What boards write in location.name when a posting has no location.
+const UNSTATED = /^(?:n\/?a|none|tbd)$/i;
+
+// Some boards put the work model ("Hybrid") or nothing useful ("N/A") in
+// location.name and keep the real place in offices[]. Only then are the
+// office names used, sorted so the string is stable.
 function resolveLocation(job: z.infer<typeof JobSchema>): string | null {
   const name = job.location?.name?.trim() ?? "";
-  if (!name) return null;
-  if (!isWorkModelOnly(name)) return name;
   const offices = [...new Set((job.offices ?? []).map((office) => office.name?.trim()).filter((n): n is string => Boolean(n)))].sort();
+  if (!name || UNSTATED.test(name)) return offices.length > 0 ? offices.join(" · ") : null;
+  if (!isWorkModelOnly(name)) return name;
   return offices.length > 0 ? [name, ...offices].join(" · ") : name;
 }
 

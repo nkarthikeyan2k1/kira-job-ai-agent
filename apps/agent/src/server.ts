@@ -6,6 +6,7 @@ import { dbCheck, ollamaCheck } from "./health.ts";
 const env = loadEnv();
 const pool = createPool(env.DATABASE_URL);
 
+// check here 
 const app = buildApp(
   { healthChecks: { db: dbCheck(pool), ollama: ollamaCheck(env.OLLAMA_URL) } },
   { logger: { level: env.LOG_LEVEL } },

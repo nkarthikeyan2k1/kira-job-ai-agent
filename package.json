@@ -15,6 +15,9 @@
     "test": "npm run test --workspaces --if-present",
     "db:migrate": "npm run db:migrate -w apps/agent --",
     "db:seed": "npm run db:seed -w apps/agent",
-    "db:create-test": "docker-compose exec -T db createdb -U postgres jobagent_test"
+    "db:create-test": "docker-compose exec -T db createdb -U postgres jobagent_test",
+    "profile:import": "npm run profile:import -w apps/agent",
+    "resume:import": "npm run resume:import -w apps/agent",
+    "filter:report": "npm run filter:report -w apps/agent --"
   }
 }

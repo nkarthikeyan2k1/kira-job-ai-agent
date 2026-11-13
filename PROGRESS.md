@@ -88,3 +88,35 @@ Newest entry at the bottom. Each session appends: what was done, what's next, op
 - Wipro: skip or sitemap scraper.
 - Which more companies to add to `companies.json` (verify each board token with one request).
 - Paid API provider/model; scheduler choice.
+
+## 2026-11-12 (stage 2: profile, resume, dedupe, hard filters; Fable)
+
+**Done**
+- Migration `0003`: `manual` source, `jobs.duplicate_of` / `repost_of`, profile columns for the filters (`work_auth` text replaced by `work_auth_countries`), `matches` check relaxed for unenforced (manual) results.
+- `npm run profile:import` (gitignored `data/profile.json`, strict Zod) and `npm run resume:import` (LaTeX → text → chunks; PDF fallback; unchanged file = no-op; old version is re-activated, not duplicated).
+- My real resume (`main.tex`) imported as version 1: 8 chunks (contact, summary, skills, 2 jobs, 2 projects, education), no embeddings yet.
+- Stage [2] wired into the pipeline: `closeStaleJobs` (set-based), per-job `dedupeJob` and `filterJob`. `filterJob` also fills `jobs.seniority` and `jobs.years_min` by rules.
+- Hard filters (pure, `pipeline/filters.ts`): title, location, seniority, years, visa, salary, dealBreakers. Mechanics in `config/scoring.ts`.
+- `npm run filter:report` (+ `-- --refilter`).
+- Parser fixes found on real data: Lever "0–0" salary is a placeholder; Greenhouse "N/A" location now falls back to offices (Stripe's were US/Canada); "New Grad" = entry level.
+- Tests: 209 passing (unit for every rule/parser; integration on `jobagent_test`).
+
+**Result on the 1,089 stored jobs** (profile: 4.8 yrs, mid/senior, Bengaluru/Chennai/Hyderabad/Pune/Coimbatore, floor ₹14 LPA)
+- 4 pass, 1,082 fail, 3 duplicates. Fails by rule: title 991, location 886, seniority 533, years 422.
+- Near misses (one rule only): title 79, location 63, years 8, seniority 2. In India: 4 Stripe Bengaluru SWE roles asking 7–8 years; 1 Paytm backend role in Noida; BMW DevOps / Data / CI roles (title).
+- Seniority could be read from 550 titles, years from 936 descriptions; salary is stated on none.
+
+**Known limits**
+- Only one fetch run exists, so stale-closing has not fired on real data (covered by tests).
+- Archived payloads were re-parsed by a throwaway script after the parser fixes; a proper `fetch:replay` command is still missing.
+- `data/profile.json` title keywords, cities and levels are my defaults; Karthikeyan has not tuned them yet.
+- Resume says "4.10 years" (meaning 4 years 10 months); the PDF says 4.8. The `.tex` is the source of truth for the fact inventory.
+- A shortlisted application is not yet moved to `closed` when its posting closes (tracker work).
+- Changes are uncommitted, by request.
+
+**Next (Fable): RAG session B**
+- `ai/llm-client.ts` + routing, JD chunking by section, embeddings for job + resume chunks, `embedJob`, similarity top-N. Input set: jobs whose current match passed (or is unenforced). With only 4 passing jobs, add companies or loosen the profile first, or the similarity ranking has nothing to rank.
+
+**Open decisions**
+- More companies (India product companies on Greenhouse/Lever/Ashby); Wipro skip vs sitemap scraper.
+- Paid API provider/model; scheduler choice.

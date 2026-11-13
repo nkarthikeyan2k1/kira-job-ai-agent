@@ -1,9 +1,11 @@
 import type pg from "pg";
 import type { Logger } from "pino";
 import { FETCH_CONFIG } from "../../config/fetch.ts";
+import { HARD_FILTER_CONFIG } from "../../config/scoring.ts";
 import { loadCompaniesConfig } from "../config/companies.ts";
 import { createHttpClient } from "../fetchers/http.ts";
 import { FETCHERS } from "../fetchers/registry.ts";
+import { runDedupeFilterStage } from "./dedupe-filter-stage.ts";
 import { runFetchStage } from "./fetch-stage.ts";
 import type { Stage } from "./run.ts";
 
@@ -30,7 +32,12 @@ export const PIPELINE_STAGES: readonly Stage<StageContext>[] = [
       log.info({ results }, "fetch summary");
     },
   },
-  stub("dedupe-filter"), // [2] cross-source duplicates, reposts, hard filters; no LLM
+  {
+    name: "dedupe-filter", // [2] close stale jobs, link duplicates and reposts, hard filters; no LLM
+    async run({ db, log }) {
+      await runDedupeFilterStage({ db, log, config: HARD_FILTER_CONFIG });
+    },
+  },
   stub("embed"), // [3] nomic-embed-text → pgvector, top-N vs resume
   stub("extract"), // [4] per-requirement evidence, local LLM
   stub("score"), // [5] deterministic, threshold from config

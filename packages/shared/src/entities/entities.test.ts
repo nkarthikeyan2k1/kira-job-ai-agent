@@ -31,6 +31,8 @@ const job = {
   firstSeen: now,
   lastSeen: now,
   closedAt: null,
+  duplicateOf: null,
+  repostOf: null,
   embeddingModel: null,
 };
 

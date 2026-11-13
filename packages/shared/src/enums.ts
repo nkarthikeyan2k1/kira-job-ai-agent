@@ -39,7 +39,9 @@ export const APPLICATION_STATUSES = [
 export const ApplicationStatusSchema = z.enum(APPLICATION_STATUSES);
 export type ApplicationStatus = z.infer<typeof ApplicationStatusSchema>;
 
-export const ATS_TYPES = ["greenhouse", "lever", "ashby", "workday", "peoplestrong", "scrape"] as const;
+// "manual" is not an ATS: it marks a job I pasted myself. It lives in this
+// list because companies.ats and jobs.source share it.
+export const ATS_TYPES = ["greenhouse", "lever", "ashby", "workday", "peoplestrong", "scrape", "manual"] as const;
 export const AtsTypeSchema = z.enum(ATS_TYPES);
 export type AtsType = z.infer<typeof AtsTypeSchema>;
 

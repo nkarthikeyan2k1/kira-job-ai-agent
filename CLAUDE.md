@@ -53,7 +53,11 @@ scheduler (daily / every 2 days, with catch-up after the Mac wakes)
 apps/agent/src/
   fetchers/      # one file per ATS (greenhouse, lever, peoplestrong), all implement Fetcher; http.ts; __fixtures__/
   lib/           # html-to-text.ts, html-entities.ts
-  pipeline/      # fetch-stage.ts, normalize.ts, url.ts, raw-store.ts; later dedupe.ts, filters.ts, liveness.ts
+  pipeline/      # [1] fetch-stage.ts, normalize.ts, url.ts, raw-store.ts
+                 # [2] dedupe-filter-stage.ts (loop), dedupe.ts + dedupe-job.ts, filters.ts (pure rules) + filter-job.ts,
+                 #     job-attributes.ts (seniority, years), places.ts, filter-report-cli.ts
+  profile/       # import.ts: data/profile.json → profile row
+  resume/        # latex-to-text.ts, pdf-text.ts, sections.ts, import.ts: master resume → resume_versions + chunks
   ai/            # embed.ts, chunk.ts, retrieve.ts, prompts/, llm-client.ts
   scoring/       # extract.ts, score.ts (pure), explain.ts
   tailoring/     # latex.ts, fact-inventory.ts, guard.ts
@@ -67,7 +71,9 @@ apps/agent/config/
   companies.json      # target companies
   fetch.ts            # user agent, timeouts, retry, rate limit, raw retention
   llm-routing.ts      # task → local/paid routing (single source of truth)
-  scoring.ts          # weights, threshold, hard-filter rules
+  scoring.ts          # hard-filter mechanics (place aliases, seniority words, tolerances); later weights + threshold
+  paths.ts            # where the personal files live
+  profile.example.json  # format of data/profile.json
   follow-ups.ts       # cadence
 apps/agent/evals/labeled.json   # hand-labeled jobs for tuning
 apps/agent/data/                # gitignored: resume.pdf, raw/, output/
@@ -78,18 +84,19 @@ apps/agent/data/                # gitignored: resume.pdf, raw/, output/
 The schema is `packages/shared/src/db/migrations/0001_init.sql`; read it for columns. Each table has a Zod schema + type in `packages/shared/src/entities/`; dashboard read models are in `views.ts`. Change the schema only by adding a numbered migration (`NNNN_name.sql`); never edit an applied one (the runner checks checksums) and never run ad-hoc `ALTER`s.
 
 - `companies`: id = slug from `companies.json`; `ats`, `ats_key`, `ats_config` jsonb (per-ATS extras, validated by that ATS's fetcher: Lever `{ region: "eu" }`; Workday host + site later), `tier` 1–3.
-- `jobs`: id (`gh:{board}:{id}`, `wd:{tenant}:{id}`); unique `url_normalized` and `(source, company_id, external_id)` (Workday ids repeat across tenants); salary columns only when the source states them; `embedding vector(768)` + `embedding_model`.
+- `jobs`: id (`gh:{board}:{id}`, `wd:{tenant}:{id}`); unique `url_normalized` and `(source, company_id, external_id)` (Workday ids repeat across tenants); salary columns only when the source states them; `seniority` and `years_min` are read from the title and text by rules (`job-attributes.ts`); `duplicate_of` / `repost_of` link copies and reposts; `embedding vector(768)` + `embedding_model`.
 - `job_chunks`, `resume_versions` (one `is_active`), `resume_chunks`: chunk text + embedding + `embedding_model`.
 - `matches`: **append-only history**, one `is_current` row per job. `hard_filter_result` jsonb; score columns are null when a hard filter failed; `final_score` is stored **0–100**; `breakdown` and `adjustments` jsonb explain the score.
 - `applications`: created when a job is **shortlisted** (`found`/`scored` are derived, never stored). `application_events` is the append-only status history.
-- `llm_calls` (cost + daily budget), `fetch_runs` (`jobs_seen` / `jobs_new` / `jobs_closed`), `profile` (single row).
+- `llm_calls` (cost + daily budget), `fetch_runs` (`jobs_seen` / `jobs_new` / `jobs_closed`), `profile` (single row: title keywords, target levels, locations, salary floor, `work_auth_countries`, notice period, deal-breakers; loaded from the gitignored `data/profile.json`).
 
 Rules:
 
 - Enum-like columns are `text` + a named `CHECK`; the value lists come from `packages/shared/src/enums.ts`, and an integration test fails if the two drift.
 - SQL is snake_case, TypeScript camelCase: read rows with `parseRows(Schema, rows)` (`db/rows.ts`), which renames columns and validates with Zod.
 - Entity schemas leave out `embedding`; only the AI code reads or writes vectors.
-- Not in the schema yet (later migrations): repost/duplicate links, drafted application answers, scheduler tables.
+- `hard_filter_result` is `{ passed, enforced, failed: [{ rule, detail }], unknown: [rule] }`. `unknown` = the posting lacks the data; it never fails a job. `enforced: false` (manual jobs) lets a failed job still be scored.
+- Not in the schema yet (later migrations): drafted application answers, scheduler tables.
 
 Statuses: `found → scored → shortlisted → applied → responded → interview → offer | rejected`, plus `skipped` (my decision), `ghosted` (no reply after max follow-ups), `withdrawn`, `closed` (posting gone). `JobStatus` = all 12 (display); `ApplicationStatus` = the 10 stored. Transitions are validated in one place (`tracker/`), not scattered.
 
@@ -120,7 +127,7 @@ Every LLM call goes through `ai/llm-client.ts` with a task name; routing comes f
 
 ## Scoring design
 
-1. **Hard filters (free, before embedding)**: title keywords (positive/negative), location/remote policy, seniority band, years required vs mine, visa/no-sponsorship statements, salary floor when stated. Failing a hard filter stores `hard_filter_result` and stops; no LLM call.
+1. **Hard filters (free, before embedding)**: title keywords (positive/negative), location/remote policy, seniority band, years required vs mine, visa/no-sponsorship statements, salary floor when stated. Failing a hard filter stores `hard_filter_result` and stops; no LLM call. Rules are pure functions in `pipeline/filters.ts`; on-site/hybrid jobs must match one of my cities, remote jobs are judged by `work_auth_countries`. A rule that cannot be checked is `unknown`, never a failure.
 2. **Similarity**: cosine similarity of the JD requirements chunk vs resume chunks. nomic scores cluster in a narrow band (~0.5–0.8), so **rescale per run (min-max) before mixing**, and keep only the top-N for LLM work.
 3. **Per-requirement extraction (local LLM)**: for each JD requirement → `{ requirement, weight: must|nice, status: met|partial|missing, evidence: "<exact quote from resume>" }`. Weight comes from the JD's own wording ("required", "must", "nice to have"). Evidence must be a quote that exists in the resume (check in code; drop it if not found).
 4. **Score in code, not by the LLM**: a 7B model's raw 0–100 is noisy. `llm_score` = weighted share of met/partial requirements; `final = w_sim · similarity_norm + w_llm · llm_score/100` plus dimension adjustments (seniority, location, salary, domain). Weights and threshold live in `config/scoring.ts`; start at `0.4 / 0.6` and tune on the eval set.
@@ -199,6 +206,9 @@ npm run db:up       # Postgres + pgvector (docker-compose; waits until healthy)
 npm run db:migrate  # apply pending migrations (-- --status to list)
 npm run db:seed     # dev only: fictional rows, empty DB only
 npm run db:create-test  # once: create jobagent_test for integration tests
+npm run profile:import  # data/profile.json → profile row
+npm run resume:import   # data/resume/main.tex (or resume.pdf) → resume version + chunks; prints the sections
+npm run filter:report   # pass/fail counts by rule; `-- --refilter` re-runs filters on unscored jobs
 npm run dev:agent   # agent in watch mode
 npm run run:agent   # run the full pipeline once
 npm run dev:web     # dashboard
@@ -265,8 +275,8 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
   - web: header + agent health badge, Shortlist, Job detail, Tracker, Profile pages
 - [x] Data model: enums + entity Zod schemas, `0001_init.sql`, migration runner (`db:migrate`), dev seed (`db:seed`); web pages read Postgres (`lib/data.ts`).
 - [x] Fetch stage: Greenhouse, Lever, PeopleStrong fetchers; companies sync from `companies.json`; raw archive (7 days); `fetch_runs`; normalize + upsert. `npm run run:agent` stores real jobs (first run 2026-11-11: 1,089 jobs from Stripe, Paytm, CRED, BMW TechWorks). The DB now holds **real data**: don't run `db:seed` or wipe the volume casually.
-- [ ] Fetchers still to do: Ashby, Workday; marking jobs closed after 2 missed runs
-- [ ] Normalize, dedupe, hard filters
+- [x] Stage [2]: profile + master resume import, stale-job closing (2 missed successful runs), duplicate/repost links, hard filters with per-job `dedupeJob` / `filterJob`. On the 1,089 stored jobs: 4 pass, 3 duplicates (2026-11-12). Tune with `data/profile.json` → `profile:import` → `filter:report -- --refilter`.
+- [ ] Fetchers still to do: Ashby, Workday. More companies are needed: only ~20 stored jobs are India software roles.
 - [ ] Embedding + pgvector retrieval
 - [ ] Scoring engine + eval set
 - [ ] Liveness, email digest, scheduler
@@ -277,7 +287,7 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 
 - [ ] Manual mode: paste a JD in the UI → score, tailoring suggestion, custom resume (after tailoring exists)
 
-Local setup: Ollama 0.34 running with `qwen2.5:7b` and `nomic-embed-text` (`llama3.1:8b` fallback not pulled). Resume files still to place: `apps/agent/data/resume/main.tex` (Overleaf → Menu → Download → Source) and `apps/agent/data/resume.pdf`. `npm run eval` doesn't exist yet.
+Local setup: Ollama 0.34 running with `qwen2.5:7b` and `nomic-embed-text` (`llama3.1:8b` fallback not pulled). Personal files are in place under `apps/agent/data/` (gitignored): `profile.json`, `resume/main.tex` (master), `resume.pdf`, `cover-letter.txt`. Never put personal files inside `data/raw/`: that folder is pruned after 7 days. `npm run eval` doesn't exist yet.
 
 ## Usage notes (temporary; remove after Nov 17, 2026)
 

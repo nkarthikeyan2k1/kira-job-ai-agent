@@ -3,7 +3,12 @@ import { RequirementResultSchema } from "../scoring.ts";
 
 export const HardFilterResultSchema = z.object({
   passed: z.boolean(),
+  // false for manual jobs: the failures are shown, but the job is scored anyway.
+  enforced: z.boolean().default(true),
   failed: z.array(z.object({ rule: z.string().min(1), detail: z.string() })),
+  // Rules that could not be checked because the posting lacks the data
+  // (e.g. no salary stated). Unknown never fails a job.
+  unknown: z.array(z.string()).default([]),
 });
 export type HardFilterResult = z.infer<typeof HardFilterResultSchema>;
 

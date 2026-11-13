@@ -34,6 +34,7 @@ const ENUM_CHECKS: Record<string, readonly string[]> = {
   application_events_to_status_check: APPLICATION_STATUSES,
   llm_calls_tier_check: LLM_TIERS,
   profile_seniority_check: SENIORITY_LEVELS,
+  profile_target_seniority_check: SENIORITY_LEVELS,
   profile_remote_types_check: REMOTE_TYPES,
 };
 

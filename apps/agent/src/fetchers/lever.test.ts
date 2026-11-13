@@ -97,6 +97,7 @@ describe("leverFetcher.parse", () => {
       { min: 50, max: 70, currency: "USD", interval: "one-time" },
       { min: 90, max: 70, currency: "USD", interval: "per-year-salary" },
       { min: 50, currency: "USD", interval: "per-year-salary" },
+      { min: 0, max: 0, currency: "INR", interval: "per-year-salary" }, // a placeholder, not a salary
     ];
 
     const { jobs } = leverFetcher.parse(ranges.map((salaryRange, i) => ({ ...posting, id: `p${i}`, salaryRange })), paytm);
@@ -104,6 +105,7 @@ describe("leverFetcher.parse", () => {
     expect(jobs.map((job) => job.salary)).toEqual([
       { min: 3_000_000, max: 4_500_000, currency: "INR", period: "year" },
       { min: 50, max: 70, currency: "USD", period: "hour" },
+      null,
       null,
       null,
       null,

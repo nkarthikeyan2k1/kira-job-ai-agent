@@ -1,0 +1,17 @@
+{
+  "targetRoles": ["Backend Engineer", "Full Stack Developer"],
+  "skills": ["TypeScript", "Node.js", "PostgreSQL"],
+  "experienceYears": 5,
+  "seniority": "mid",
+  "targetSeniority": ["mid", "senior"],
+  "titleKeywordsInclude": ["backend", "full stack", "software engineer"],
+  "titleKeywordsExclude": ["intern", "sales"],
+  "locations": ["Bengaluru", "Pune"],
+  "remoteTypes": ["onsite", "hybrid", "remote"],
+  "salaryMin": 1200000,
+  "salaryCurrency": "INR",
+  "workAuthCountries": ["India"],
+  "needsSponsorship": true,
+  "noticePeriodDays": 30,
+  "dealBreakers": ["night shift"]
+}

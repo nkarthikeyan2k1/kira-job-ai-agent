@@ -22,7 +22,7 @@ async function ProfileDetails() {
 
   const salary =
     profile.salaryMin === null ? null : `${profile.salaryMin.toLocaleString("en-IN")} ${profile.salaryCurrency ?? ""}`.trim();
-  const sponsorship = profile.needsSponsorship === null ? null : profile.needsSponsorship ? "Needs sponsorship" : "No sponsorship needed";
+  const sponsorship = profile.needsSponsorship === null ? null : profile.needsSponsorship ? "needs sponsorship elsewhere" : "no sponsorship needed";
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -49,7 +49,7 @@ async function ProfileDetails() {
         <Field value={salary} />
       </Card>
       <Card title="Work authorisation">
-        <Field value={[profile.workAuth, sponsorship].filter(Boolean).join(" · ")} />
+        <Field value={[profile.workAuthCountries.join(", "), sponsorship].filter(Boolean).join(" · ")} />
       </Card>
       <Card title="Deal-breakers">
         <ChipList items={profile.dealBreakers} />

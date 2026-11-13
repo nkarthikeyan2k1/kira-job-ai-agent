@@ -35,6 +35,8 @@ export const JobSchema = z.object({
   firstSeen: z.date(),
   lastSeen: z.date(),
   closedAt: z.date().nullable(),
+  duplicateOf: z.string().nullable(), // the stored original this posting duplicates
+  repostOf: z.string().nullable(), // an identical posting that was closed before this one appeared
   embeddingModel: z.string().nullable(),
 });
 export type Job = z.infer<typeof JobSchema>;

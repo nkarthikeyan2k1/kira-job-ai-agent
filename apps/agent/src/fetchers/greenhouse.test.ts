@@ -70,6 +70,22 @@ describe("greenhouseFetcher.parse", () => {
     expect(jobs.map((job) => job.location)).toEqual(["Hybrid · Austin · Bengaluru", "Hybrid - London", null]);
   });
 
+  it("uses the offices when the location is not stated", () => {
+    const base = { id: 1, title: "Engineer", absolute_url: "https://example.com/1", content: "<p>Build</p>" };
+    const payload = {
+      jobs: [
+        { ...base, location: { name: "N/A" }, offices: [{ name: "US" }] },
+        { ...base, id: 2, location: { name: "na" }, offices: [{ name: "Canada Locations" }, { name: "US" }] },
+        { ...base, id: 3, location: { name: "N/A" } },
+        { ...base, id: 4, location: { name: "" }, offices: [{ name: "Dublin" }] },
+      ],
+    };
+
+    const { jobs } = greenhouseFetcher.parse(payload, stripe);
+
+    expect(jobs.map((job) => job.location)).toEqual(["US", "Canada Locations · US", null, "Dublin"]);
+  });
+
   it("rejects a payload that is not a board", () => {
     expect(() => greenhouseFetcher.parse({ error: "not found" }, stripe)).toThrow();
   });

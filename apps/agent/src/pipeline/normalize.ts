@@ -18,6 +18,7 @@ const ID_PREFIX: Record<AtsType, string> = {
   workday: "wd",
   peoplestrong: "ps",
   scrape: "sc",
+  manual: "mn",
 };
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");

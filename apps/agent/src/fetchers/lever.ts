@@ -78,7 +78,8 @@ function resolveRemoteType(workplaceType: string | null | undefined): RemoteType
 
 function resolveSalary(range: Posting["salaryRange"]): RawJob["salary"] {
   if (!range || typeof range.min !== "number" || typeof range.max !== "number" || !range.currency) return null;
-  if (range.currency.length !== 3 || range.min < 0 || range.max < range.min) return null;
+  // Some boards fill the range with 0–0 as a placeholder: that is not a stated salary.
+  if (range.currency.length !== 3 || range.min < 0 || range.max <= 0 || range.max < range.min) return null;
   const interval = range.interval?.toLowerCase() ?? "";
   const period: SalaryPeriod | null = interval.includes("year") ? "year" : interval.includes("month") ? "month" : interval.includes("hour") ? "hour" : null;
   if (!period) return null;
