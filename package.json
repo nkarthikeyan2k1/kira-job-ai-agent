@@ -18,6 +18,10 @@
     "db:create-test": "docker-compose exec -T db createdb -U postgres jobagent_test",
     "profile:import": "npm run profile:import -w apps/agent",
     "resume:import": "npm run resume:import -w apps/agent",
-    "filter:report": "npm run filter:report -w apps/agent --"
+    "filter:report": "npm run filter:report -w apps/agent --",
+    "similarity:report": "npm run similarity:report -w apps/agent --",
+    "score:report": "npm run score:report -w apps/agent --",
+    "eval:label": "npm run eval:label -w apps/agent --",
+    "eval": "npm run eval -w apps/agent --"
   }
 }

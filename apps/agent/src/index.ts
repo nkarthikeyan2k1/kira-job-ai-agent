@@ -11,7 +11,7 @@ const log = pino({ level: env.LOG_LEVEL });
 const db = createPool(env.DATABASE_URL);
 
 try {
-  await runPipeline(PIPELINE_STAGES, { log, db });
+  await runPipeline(PIPELINE_STAGES, { log, db, ollamaUrl: env.OLLAMA_URL });
 } catch (err) {
   log.fatal({ err }, "pipeline failed");
   process.exitCode = 1;

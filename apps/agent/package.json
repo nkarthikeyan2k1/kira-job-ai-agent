@@ -13,7 +13,11 @@
     "db:seed": "tsx --env-file-if-exists=../../.env src/db/seed-dev.ts",
     "profile:import": "tsx --env-file-if-exists=../../.env src/profile/import-cli.ts",
     "resume:import": "tsx --env-file-if-exists=../../.env src/resume/import-cli.ts",
-    "filter:report": "tsx --env-file-if-exists=../../.env src/pipeline/filter-report-cli.ts"
+    "filter:report": "tsx --env-file-if-exists=../../.env src/pipeline/filter-report-cli.ts",
+    "similarity:report": "tsx --env-file-if-exists=../../.env src/ai/similarity-report-cli.ts",
+    "score:report": "tsx --env-file-if-exists=../../.env src/scoring/score-report-cli.ts",
+    "eval:label": "tsx --env-file-if-exists=../../.env src/scoring/eval-label-cli.ts",
+    "eval": "tsx --env-file-if-exists=../../.env src/scoring/eval-cli.ts"
   },
   "dependencies": {
     "@kira/shared": "*",

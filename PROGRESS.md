@@ -120,3 +120,56 @@ Newest entry at the bottom. Each session appends: what was done, what's next, op
 **Open decisions**
 - More companies (India product companies on Greenhouse/Lever/Ashby); Wipro skip vs sitemap scraper.
 - Paid API provider/model; scheduler choice.
+
+## 2026-11-14 (Session B design; Fable, design only)
+
+**Done**
+- Stage [3] design approved and written as a build spec: `docs/session-b-embeddings.md` (measured Ollama facts, chunking rules, signatures, SQL, tests, verification).
+- Decided: embed every open job (not only passing ones); normalise similarity over all embedded jobs; leave `jobs.embedding` NULL; keep the 8 resume chunks.
+
+**Next**
+- **Opus**: implement `docs/session-b-embeddings.md` in a fresh session (no redesign needed).
+- **Fable** (budget is shared with a new trading-terminal project, so design only): Session C scoring design, Session D tailoring-guard design, each written as a spec for Opus to build.
+
+**Open decisions**
+- Unchanged: more companies, paid API provider, scheduler, Wipro.
+
+## 2026-11-15 (Session B built; Opus)
+
+**Done**
+- Stage [3] built from `docs/session-b-embeddings.md`: `ai/chunk.ts`, `ai/ollama.ts`, `ai/llm-client.ts` (routing, prefix, 1 retry, `llm_calls` row per attempt), `ai/embed.ts` (`embedJob`, `embedResume`), `ai/retrieve.ts` (`similarityForJob`, `retrieveResumeChunks`, `normalizeSimilarities`), `pipeline/embed-stage.ts`, `npm run similarity:report`.
+- Real run: 1,086 jobs embedded in ~2 min (1,084 Ollama calls, 0 failures, avg 74 ms); 1,083 similarities (basis: requirements 1,052, responsibilities 23, other 8); raw 0.48–0.74, median 0.61. A second run re-embeds nothing.
+- Passing jobs ranked: BMW Java Backend 0.717, Paytm Senior SE Backend 0.708, Paytm Backend TL 0.671, BMW Automotive SE 0.671.
+- Tests: 260 passing (chunker on Stripe/Paytm/BMW/CRED shapes, LLM client with fake transport, 11 integration tests with a fake embedder).
+
+**Deviations from the spec (small)**
+- Chunker: "label: value" lines ("Experience: 4-8 years") are content, not headings (they were being dropped); headings may end with "?" ("what is CRED?").
+- Resume contact chunk is skipped by content (email/phone pattern), not by `other#0` position.
+- The stage recomputes similarity for every embedded job each run (cheap SQL), not only newly embedded ones, so a new resume version updates all similarities.
+
+**Finding for Session C**
+- Similarity measures topic, not role fit: the overall top 20 is mostly Paytm fintech business/product roles, and the resume **summary** chunk is the best match for most jobs (it is a broad "fintech, payments, trading" paragraph). Among passing jobs the ranking is sensible. Options: drop the summary from similarity, or keep it and let the per-requirement LLM step decide. Hard filters already remove off-role jobs.
+
+**Next**
+- Session C (scoring): design, then build.
+
+## 2026-11-16 (Session C built; Opus)
+
+**Done**
+- Stages [4] + [5]: `llm-client.generateJson` (Ollama `/api/chat` with a JSON schema, temperature 0, seed 1, `num_ctx` 8192; retry once on unreachable and once on invalid output; refuses a prompt that filled the window), prompt `extract-requirements/v1` (JD as data in `<JOB>`, whole resume in `<RESUME>`, delimiter tags stripped), `scoring/verify.ts`, `scoring/score.ts`, `computeJobScore` / `scoreJob` (append-only match, shortlist + application event at ≥ 70), stage "score" (top 30 passing by similarity + all manual jobs; Ollama down = deferred; unusable answer = job skipped, retried next run).
+- Eval: `npm run eval:label` (interactive, mixes passing / near-miss / rejected jobs), `npm run eval` (dry run, precision, recall, Spearman, MAE, a summary line for this file). `evals/labeled.json` is empty.
+- `npm run score:report` (`-- --score`).
+- Tests: 293 passing (verify, score maths, eval metrics, prompt, generateJson with a fake transport, 7 integration tests with a fake model).
+
+**First real run** (4 passing jobs, ~2.5 min)
+- 78.6 BMW QCP Java Backend (shortlisted) · 74.8 Paytm Senior SE Backend (shortlisted) · 70.4 Paytm Backend TL/STL (shortlisted) · 51.1 BMW Automotive SE + AI (not).
+- Quotes are real but sometimes **irrelevant**: e.g. "Kubernetes: met" citing the payments bullet. Verification only checks that a quote exists, not that it supports the requirement.
+- Scores look **too generous for Java roles**: the core stack (Java/Quarkus, Java/Spring Boot) is missing, yet many generic must-haves ("clean code", "Git", "problem solving") are met. Paytm TL also counts a "Tier 1/2 degree" as met.
+
+**Next**
+- **Karthikeyan**: label ~50 jobs (`npm run eval:label`, ~30 min), then `npm run eval` for the baseline numbers.
+- Likely first tuning (measure with eval before and after): (1) evidence must share a keyword with its requirement, else `partial`; (2) cap the score when the posting's primary language/framework is missing; (3) prompt v2 asking the model to merge generic soft-skill lines.
+- Session D (tailoring + guard): design.
+
+**Open decisions**
+- Unchanged: more companies, paid API provider, scheduler, Wipro.

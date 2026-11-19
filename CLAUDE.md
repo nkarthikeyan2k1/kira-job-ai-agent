@@ -58,8 +58,11 @@ apps/agent/src/
                  #     job-attributes.ts (seniority, years), places.ts, filter-report-cli.ts
   profile/       # import.ts: data/profile.json → profile row
   resume/        # latex-to-text.ts, pdf-text.ts, sections.ts, import.ts: master resume → resume_versions + chunks
-  ai/            # embed.ts, chunk.ts, retrieve.ts, prompts/, llm-client.ts
-  scoring/       # extract.ts, score.ts (pure), explain.ts
+  ai/            # [3] chunk.ts (pure), embed.ts (embedJob, embedResume), retrieve.ts (similarityForJob, retrieveResumeChunks),
+                 #     llm-client.ts (embed + generateJson: routing, retries, llm_calls), ollama.ts, vector.ts, similarity-report-cli.ts,
+                 #     prompts/extract-requirements.ts (prompt + PROMPT_VERSION + Zod/JSON schema)
+  scoring/       # [4] extract.ts (model call), verify.ts (pure: quote + weight checks); [5] score.ts (pure maths),
+                 #     score-job.ts (computeJobScore, scoreJob), eval-metrics.ts, labels.ts, eval/eval-label/score-report CLIs
   tailoring/     # latex.ts, fact-inventory.ts, guard.ts
   apply/         # playwright prefill (later)
   tracker/       # status transitions, follow-up cadence
@@ -70,12 +73,12 @@ apps/agent/src/
 apps/agent/config/
   companies.json      # target companies
   fetch.ts            # user agent, timeouts, retry, rate limit, raw retention
-  llm-routing.ts      # task → local/paid routing (single source of truth)
-  scoring.ts          # hard-filter mechanics (place aliases, seniority words, tolerances); later weights + threshold
+  llm-routing.ts      # task → model/tier/prefix (single source of truth); EMBEDDING tag + settings
+  scoring.ts          # hard-filter mechanics; CHUNK_CONFIG, SIMILARITY_CONFIG (embedded sections, topN); SCORING_CONFIG (mix, weights, threshold)
   paths.ts            # where the personal files live
   profile.example.json  # format of data/profile.json
   follow-ups.ts       # cadence
-apps/agent/evals/labeled.json   # hand-labeled jobs for tuning
+apps/agent/evals/labeled.json   # hand-labeled jobs for tuning (committed; written by `npm run eval:label`)
 apps/agent/data/                # gitignored: resume.pdf, raw/, output/
 ```
 
@@ -85,7 +88,7 @@ The schema is `packages/shared/src/db/migrations/0001_init.sql`; read it for col
 
 - `companies`: id = slug from `companies.json`; `ats`, `ats_key`, `ats_config` jsonb (per-ATS extras, validated by that ATS's fetcher: Lever `{ region: "eu" }`; Workday host + site later), `tier` 1–3.
 - `jobs`: id (`gh:{board}:{id}`, `wd:{tenant}:{id}`); unique `url_normalized` and `(source, company_id, external_id)` (Workday ids repeat across tenants); salary columns only when the source states them; `seniority` and `years_min` are read from the title and text by rules (`job-attributes.ts`); `duplicate_of` / `repost_of` link copies and reposts; `embedding vector(768)` + `embedding_model`.
-- `job_chunks`, `resume_versions` (one `is_active`), `resume_chunks`: chunk text + embedding + `embedding_model`.
+- `job_chunks`, `resume_versions` (one `is_active`), `resume_chunks`: chunk text + embedding + `embedding_model`. Only `requirements` / `responsibilities` job chunks (or `other` when a job has neither) get vectors; `about` / `benefits` are text only. `jobs.embedding_model` = the `EMBEDDING.tag` a job was chunked with; `jobs.embedding` (one vector per job) is unused.
 - `matches`: **append-only history**, one `is_current` row per job. `hard_filter_result` jsonb; score columns are null when a hard filter failed; `final_score` is stored **0–100**; `breakdown` and `adjustments` jsonb explain the score.
 - `applications`: created when a job is **shortlisted** (`found`/`scored` are derived, never stored). `application_events` is the append-only status history.
 - `llm_calls` (cost + daily budget), `fetch_runs` (`jobs_seen` / `jobs_new` / `jobs_closed`), `profile` (single row: title keywords, target levels, locations, salary floor, `work_auth_countries`, notice period, deal-breakers; loaded from the gitignored `data/profile.json`).
@@ -128,10 +131,10 @@ Every LLM call goes through `ai/llm-client.ts` with a task name; routing comes f
 ## Scoring design
 
 1. **Hard filters (free, before embedding)**: title keywords (positive/negative), location/remote policy, seniority band, years required vs mine, visa/no-sponsorship statements, salary floor when stated. Failing a hard filter stores `hard_filter_result` and stops; no LLM call. Rules are pure functions in `pipeline/filters.ts`; on-site/hybrid jobs must match one of my cities, remote jobs are judged by `work_auth_countries`. A rule that cannot be checked is `unknown`, never a failure.
-2. **Similarity**: cosine similarity of the JD requirements chunk vs resume chunks. nomic scores cluster in a narrow band (~0.5–0.8), so **rescale per run (min-max) before mixing**, and keep only the top-N for LLM work.
-3. **Per-requirement extraction (local LLM)**: for each JD requirement → `{ requirement, weight: must|nice, status: met|partial|missing, evidence: "<exact quote from resume>" }`. Weight comes from the JD's own wording ("required", "must", "nice to have"). Evidence must be a quote that exists in the resume (check in code; drop it if not found).
-4. **Score in code, not by the LLM**: a 7B model's raw 0–100 is noisy. `llm_score` = weighted share of met/partial requirements; `final = w_sim · similarity_norm + w_llm · llm_score/100` plus dimension adjustments (seniority, location, salary, domain). Weights and threshold live in `config/scoring.ts`; start at `0.4 / 0.6` and tune on the eval set.
-5. **Explanation**: 1–2 lines citing resume evidence. Reject explanations that mention a skill not in the resume.
+2. **Similarity** (built, `ai/retrieve.ts`): for each requirements chunk (else responsibilities, else other), its best cosine against the resume chunks; the job's similarity is the length-weighted average. Every open job is embedded, not only passing ones. Raw values sit in 0.48–0.74, so `similarity_norm` is **min-max over all open jobs** (not per run). Only the top-N passing jobs go to the LLM.
+3. **Per-requirement extraction (local LLM, built)**: `qwen2.5:7b` gets the job's requirements chunks (else responsibilities / other) in `<JOB>` and the **whole resume** in `<RESUME>` (`SCORING_CONFIG.resumeContext: "retrieved"` switches to RAG-retrieved chunks), and returns `{ requirement, weight: must|nice, status: met|partial|missing, evidence }` constrained by a JSON schema (temperature 0, seed 1, deterministic). Code then enforces (`scoring/verify.ts`): evidence must be a real resume quote (else dropped); `met` without valid evidence → `partial`; wording like "a plus / preferred / good to have" → `nice`. ~20–50 s per job on the M5.
+4. **Score in code, not by the LLM** (built, `scoring/score.ts`): `llm_score` = 100 × Σ weight·value / Σ weight with must = 2, nice = 1, met = 1, partial = 0.5, missing = 0; `final = 100 × (0.4 · similarity_norm + 0.6 · llm_score/100)` (one part carries all the weight if the other is missing). No dimension adjustments yet (hard filters cover location, level, salary). `final ≥ 70` → `applications` row `shortlisted` + event. Tune on the eval set.
+5. **Explanation**: for now a template `reason` built from the breakdown ("Meets 3 of 5 must-haves; missing: Java, Spring Boot"). Later (paid tier): 1–2 lines citing resume evidence; reject explanations that mention a skill not in the resume.
 
 `scoring/score.ts` is a pure function with unit tests: same breakdown in → same score out.
 
@@ -209,24 +212,27 @@ npm run db:create-test  # once: create jobagent_test for integration tests
 npm run profile:import  # data/profile.json → profile row
 npm run resume:import   # data/resume/main.tex (or resume.pdf) → resume version + chunks; prints the sections
 npm run filter:report   # pass/fail counts by rule; `-- --refilter` re-runs filters on unscored jobs
+npm run similarity:report  # job ranking vs resume; `-- --embed` runs stage [3] first (needs Ollama)
+npm run score:report    # scored jobs with their requirement breakdown; `-- --score` runs stages [4]+[5] first (needs Ollama)
+npm run eval:label      # label ~50 jobs by hand (y/n + your 0–100) into evals/labeled.json
+npm run eval            # score the labelled jobs (no DB writes) and print precision / recall / correlation; `-- --limit=10` for a quick check
 npm run dev:agent   # agent in watch mode
 npm run run:agent   # run the full pipeline once
 npm run dev:web     # dashboard
 npm run typecheck   # tsc --noEmit across workspaces
 npm test            # unit tests
-npm run eval        # score the labeled set and print metrics
 ```
 
 ## Conventions
 
 - `Fetcher` (`fetchers/types.ts`) has two halves: `fetch(company, ctx)` does the network I/O and returns the payload as received (archived gzipped in `data/raw/` first); `parse(payload, company)` is pure and returns `{ jobs: RawJob[], sightings, skipped }`. Tests feed fixtures to `parse`; no HTTP mocking of real sites.
-- Normalization is separate and pure (`pipeline/normalize.ts`: id, `url_normalized`, fingerprint, hashes). `seniority` and `years_min` stay null until JD parsing exists.
+- Normalization is separate and pure (`pipeline/normalize.ts`: id, `url_normalized`, fingerprint, hashes). `seniority` and `years_min` are filled by stage [2] rules.
 - All outbound HTTP goes through `fetchers/http.ts` with an explicit host allowlist per request; settings in `config/fetch.ts`.
 - Each posting is validated on its own (Zod); a bad posting is skipped and counted, never fatal for the board.
 - Code ported from career-ops carries a header naming its source; the licence is in `THIRD_PARTY_NOTICES.md`.
 - Shared types and Zod schemas come from `packages/shared`; never redefine them in an app.
 - Model names, thresholds, weights and cadences come from config/`.env`, never hardcoded.
-- Strip HTML before embedding. Chunk instead of truncating; if something must be cut, log it.
+- Strip HTML before embedding. Chunk instead of truncating; if something must be cut, log it. Ollama calls send `truncate: false`, so over-long input errors instead of being cut silently.
 - Keep raw API responses 7 days in `apps/agent/data/raw/` so re-scoring doesn't re-fetch.
 - Every prompt has a `prompt_version`; changing a prompt bumps it, so old and new scores can be compared.
 - Structured logs (Fastify's pino). `/health` reports DB and Ollama status.
@@ -277,8 +283,8 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 - [x] Fetch stage: Greenhouse, Lever, PeopleStrong fetchers; companies sync from `companies.json`; raw archive (7 days); `fetch_runs`; normalize + upsert. `npm run run:agent` stores real jobs (first run 2026-11-11: 1,089 jobs from Stripe, Paytm, CRED, BMW TechWorks). The DB now holds **real data**: don't run `db:seed` or wipe the volume casually.
 - [x] Stage [2]: profile + master resume import, stale-job closing (2 missed successful runs), duplicate/repost links, hard filters with per-job `dedupeJob` / `filterJob`. On the 1,089 stored jobs: 4 pass, 3 duplicates (2026-11-12). Tune with `data/profile.json` → `profile:import` → `filter:report -- --refilter`.
 - [ ] Fetchers still to do: Ashby, Workday. More companies are needed: only ~20 stored jobs are India software roles.
-- [ ] Embedding + pgvector retrieval
-- [ ] Scoring engine + eval set
+- [x] Stage [3]: chunking, nomic embeddings (local), similarity per job, retrieval, `llm_calls` logging; Ollama down = deferred, not failed. First run 2026-11-15: 1,086 jobs embedded in ~2 min, similarity 0.48–0.74. Spec: `docs/session-b-embeddings.md`.
+- [x] Stages [4]+[5]: per-requirement extraction (local `qwen2.5:7b`), code checks, score in code, shortlist at 70, `scoreJob` per job, eval tooling. First real run 2026-11-16: 4 passing jobs scored (51–79), 3 shortlisted. **Eval set not labelled yet** (`npm run eval:label`).
 - [ ] Liveness, email digest, scheduler
 - [ ] Resume tailoring + no-invention guard
 - [ ] Tracker + follow-ups
@@ -287,7 +293,7 @@ Fable 5.2 is stronger but uses my limit much faster than Opus 5.5; save it for h
 
 - [ ] Manual mode: paste a JD in the UI → score, tailoring suggestion, custom resume (after tailoring exists)
 
-Local setup: Ollama 0.34 running with `qwen2.5:7b` and `nomic-embed-text` (`llama3.1:8b` fallback not pulled). Personal files are in place under `apps/agent/data/` (gitignored): `profile.json`, `resume/main.tex` (master), `resume.pdf`, `cover-letter.txt`. Never put personal files inside `data/raw/`: that folder is pruned after 7 days. `npm run eval` doesn't exist yet.
+Local setup: Ollama 0.34 running with `qwen2.5:7b` and `nomic-embed-text` (`llama3.1:8b` fallback not pulled). Personal files are in place under `apps/agent/data/` (gitignored): `profile.json`, `resume/main.tex` (master), `resume.pdf`, `cover-letter.txt`. Never put personal files inside `data/raw/`: that folder is pruned after 7 days.
 
 ## Usage notes (temporary; remove after Nov 17, 2026)
 

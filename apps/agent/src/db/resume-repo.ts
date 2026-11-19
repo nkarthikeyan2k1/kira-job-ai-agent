@@ -72,3 +72,17 @@ export async function saveResumeVersion(db: pg.Pool, resume: NewResumeVersion): 
     client.release();
   }
 }
+
+/** The active resume: its full text and its chunks. Null until a resume is imported. */
+export async function getActiveResume(
+  db: pg.Pool,
+): Promise<{ id: number; content: string; chunks: { id: number; section: ResumeSection; content: string }[] } | null> {
+  const version = await db.query<{ id: number; content: string }>("SELECT id, content FROM resume_versions WHERE is_active");
+  const active = version.rows[0];
+  if (!active) return null;
+  const chunks = await db.query<{ id: number; section: ResumeSection; content: string }>(
+    "SELECT id, section, content FROM resume_chunks WHERE resume_version_id = $1 ORDER BY id",
+    [active.id],
+  );
+  return { id: active.id, content: active.content, chunks: chunks.rows };
+}

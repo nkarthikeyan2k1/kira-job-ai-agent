@@ -70,3 +70,45 @@ export const HARD_FILTER_CONFIG = {
 } as const;
 
 export type HardFilterConfig = typeof HARD_FILTER_CONFIG;
+
+// Stage [3]: how a job description is cut into chunks before embedding.
+// 2,400 characters is about 780 tokens, well inside nomic-embed-text's 2,048.
+export const CHUNK_CONFIG = {
+  maxChars: 2400,
+  minChars: 60, // smaller pieces are merged into the previous chunk of the same section
+  headingMaxChars: 60,
+  headingMaxWords: 8,
+} as const;
+export type ChunkConfig = typeof CHUNK_CONFIG;
+
+export const SIMILARITY_CONFIG = {
+  // Only these sections get vectors: "About us" and benefits are the same
+  // boilerplate across a company's postings and would only add noise.
+  embedSections: ["requirements", "responsibilities"],
+  // How many of the most similar jobs go on to the LLM step (stage [4]).
+  topN: 30,
+} as const;
+
+// Stages [4] + [5]: how the per-requirement breakdown becomes a score.
+export interface ScoringConfig {
+  mix: { similarity: number; llm: number };
+  requirementWeight: Record<"must" | "nice", number>;
+  statusValue: Record<"met" | "partial" | "missing", number>;
+  shortlistThreshold: number;
+  resumeContext: "full" | "retrieved";
+  retrieveK: number;
+  maxJobChars: number;
+}
+
+export const SCORING_CONFIG: ScoringConfig = {
+  // final = mix.similarity · similarity_norm + mix.llm · llm_score/100 (start values; tune on the eval set)
+  mix: { similarity: 0.4, llm: 0.6 },
+  requirementWeight: { must: 2, nice: 1 },
+  statusValue: { met: 1, partial: 0.5, missing: 0 },
+  shortlistThreshold: 70, // final_score at or above → an application row is created (status "shortlisted")
+  // "full": the whole resume goes in the prompt (it is small, ~1,100 tokens).
+  // "retrieved": only the resume chunks closest to each requirements chunk (RAG), for when it grows.
+  resumeContext: "full",
+  retrieveK: 3,
+  maxJobChars: 12_000, // requirements text sent to the model; more is cut and logged
+};
